@@ -1,0 +1,85 @@
+# Shona specialist, pseudo-label round.  name: w2vbert_snaspec_p
+#
+# Continues the refreshed Shona specialist (configs/w2vbert_snaspec_r.yaml) for two epochs at
+# 1.5e-5, adding pseudo-labels over the WAXAL unlabeled Shona pool through the external manifest
+# below. Those labels come from the refreshed specialist itself, so their text already follows our
+# punctuated WAXAL conventions; the WAXAL gold rows still ride in every batch. vocab_dir points at
+# the parent, so the CTC token order is preserved.
+#
+# Base: facebook/w2v-bert-2.0 (600M) + CTC head, add_adapter. Multi-condition training
+# (MUSAN noise + RIR reverb) is applied ON-THE-FLY in the collator so each epoch sees fresh
+# augmentation. Targets and vocabulary are RAW (see the normalize block at the end).
+#
+# NOT A STANDALONE RELEASE. Self-training on the unlabeled pools was flat and was dropped, so this
+# run was never published on its own. It survives through configs/w2vbert_snaspec_p2.yaml, whose
+# output is the snaspec_p2 ingredient of anyantudre/waxal-w2vbert-linsna-soup5; the checkpoint is
+# archived in anyantudre/waxal-checkpoints.
+
+data:
+  languages: [sna]
+  map_in_memory: true                     # DISK: only ~23G free vs a ~21G raw-waveform Map -> keep it in the
+                                          # 90G node RAM instead (41k rows x ~0.5MB ~= 21G). Requires serial map.
+  map_num_proc: null                      # must stay serial: num_proc>1 spills temp shards to disk
+
+
+  external:
+    - {local: data/pseudo_sna/manifest_keep.tsv, audio_col: audio, text_col: transcription, sep: "	"}
+
+model:
+  type: w2v_bert
+  id: experiments/w2vbert_snaspec_r_s42  # continue the refreshed specialist
+  add_adapter: true
+  freeze_base: false
+  gradient_checkpointing: true
+  vocab_dir: experiments/w2vbert_snaspec_r_s42  # continuing -> the CTC head keeps its token order
+
+train:
+  per_device_batch_size: 12               # matches the champion (600M + add_adapter on 32GB)
+  grad_accum: 3                           # effective batch 36
+  lr: 1.5e-5                              # refining, not training from scratch
+  warmup_ratio: 0.1
+  num_epochs: 2
+  fp16: false
+  bf16: true
+  save_total_limit: 2                     # DISK: 250G ZFS quota is a hard limit (w2v-BERT ckpts ~7G each)
+  dataloader_num_workers: 8               # parallelize the on-the-fly collator mel-FE + aug
+
+augment:
+  enabled: true
+  noise_dir: data/noise/musan/noise    # MUSAN noise (SLR17), NOT speech/
+  rir_dir: data/noise/RIRS_NOISES/simulated_rirs   # OpenSLR 28 RIRs
+  noise_min_snr: 5.0
+  noise_max_snr: 20.0
+  p_noise: 0.5
+  p_rir: 0.3
+  p_gaussian: 0.1
+  p_gain: 0.3
+  p_pitch: 0.0                            # DROPPED, formant-warping, char-CTC-toxic (-2.8% confirmed)
+  p_speed: 0.0                            # DROPPED, same
+  p_air: 0.0
+  p_mp3: 0.0
+
+infer:
+  language_from_id: false
+
+# RAW targets and RAW vocabulary: no lowercasing and no punctuation stripping. CER is scored on the
+# raw string and WER does not strip punctuation, so a stripped model is capped on both metrics.
+normalize:
+  lowercase: false
+  strip_punct: false
+  nfc: true
+  collapse_ws: true
+
+# PER-LANGUAGE SPECIALIST (sna), decided on the corrected-test evidence of 2026-08-02:
+#   * raw caps+punct vocab CONFIRMED on the new LB (p1raw 0.7421 vs stripped robust 0.7250)
+#   * AfriVoice is the test's exact domain (photo descriptions, ~20s, Digital Umuganda), ~85-100h/lang
+#   * routing is safe: open-set LID calls lin/sna at 0.99 confidence on 99% of clips
+# Warm start = the multilingual raw-vocab arm; this run narrows it to one language on ~3x more
+# in-domain data. The leader's public recipe is exactly this shape (w2v-bert -> AfriVoice -> WAXAL).
+
+# REFRESHER: LB decomposition showed the specialists lost the punctuation habit (32% of rows)
+# after 3 AfriVoice epochs; the new refs measurably reward punct (p1raw 0.7421 vs robust 0.7250).
+
+# PSEUDO ROUND (tier B): sna WAXAL-unlabeled pool labeled by the refreshed specialist
+# (LB 0.7448 routed). Pseudo text inherits our punctuated WAXAL conventions by construction, so it
+# cannot cause the AfriVoice-style convention damage; gold rows ride in every batch regardless.

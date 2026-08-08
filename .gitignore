@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+*.pem
+
+# Data and weights are downloaded or generated, never committed. The directories themselves are
+# created on demand by the code, so nothing under them is tracked and no placeholders are needed.
+data/
+models/
+
+# Generated analysis output
+reports/

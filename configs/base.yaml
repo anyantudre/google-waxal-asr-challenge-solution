@@ -1,0 +1,85 @@
+# configs/base.yaml: defaults for every run. Experiment YAMLs override only what
+# they change; CLI dotlist overrides both (e.g. `seed=43 train.lr=1e-4`).
+# Every run saves its resolved config.yaml for reproducibility.
+
+seed: 42
+
+data:
+  hf_dataset: google/WaxalNLP
+  languages: [lin, sna, lug]              # which languages this run covers
+  configs: {lin: lin_asr, sna: sna_asr, lug: lug_asr}
+  sample_rate: 16000
+  max_duration_s: 40.0                   # measured: lin/sna ~max 34s, lug tail to 44s (20% >30s!), see results/eval/duration_stats.json
+  min_duration_s: 0.5                    # NOTE: Whisper/Gemma cap at 30s -> Luganda needs chunk-and-stitch, not just filtering
+  holdout: speaker_disjoint              # local Phase-2 proxy; NOT the leaked test set
+  holdout_frac: 0.05
+  limit: null                            # per-language cap (streaming) for fast local/smoke runs; null = full
+  external: []                           # Stage-3 auxiliary corpora added to TRAIN only (holdout/val stay pure WAXAL).
+                                         # each: {hf, config?, split?, lang, text_col?, audio_col?, max_rows?}
+  map_num_proc: null                     # parallel workers for the feature-extraction .map() (null=serial).
+                                         # set (e.g. 8) for large datasets so the Map finishes inside the 4h job.
+  oversample: null                       # per-language TRAIN duplication, e.g. {lin: 2} = each lin clip
+                                         # seen twice per epoch. holdout/val keep the real mix.
+
+model:
+  type: seq2seq                          # ctc | seq2seq  -> waxal.models registry
+  id: openai/whisper-small               # license-clean default (Apache-2.0). NOTE: MMS is CC-BY-NC
+                                         # (ship-blocker): use it for benchmarking only, never final.
+  language_adapter: null                 # MMS adapter code, optional (CTC only)
+  freeze_encoder: false
+  gradient_checkpointing: true
+
+train:
+  output_dir: null                       # set by launcher -> experiments/<name>
+  per_device_batch_size: 8
+  grad_accum: 2
+  lr: 3.0e-5
+  warmup_ratio: 0.1
+  num_epochs: 5
+  max_steps: -1                          # >0 overrides epochs (used by smoke test)
+  save_steps: 300                        # frequent checkpoints -> a 4h-wall-clock kill loses <=300 steps
+  eval_steps: 400
+  eval_max_samples: 800                  # cap in-training eval (full holdout eval is scripts/evaluate.py)
+  save_total_limit: 2                    # keep best + latest (latest = resume point)
+  fp16: true                             # T4/4070; set false + bf16 true on the RTX 5090
+  bf16: false                            # prefer bf16 on the 5090 (Blackwell), Whisper-safe vs fp16 NaNs
+  auto_find_batch_size: true             # start at per_device_batch_size, auto-halve on OOM (no crash)
+  resume: true
+  hub_model_id: null                     # set to push a resumable last-checkpoint/ to HF each save
+
+augment:                                 # train-split only; audiomentations (waxal/audio.py)
+  enabled: false
+  noise_dir: null                        # MUSAN noise dir (OpenSLR SLR17) -> AddBackgroundNoise
+  rir_dir: null                          # RIR dir (OpenSLR SLR28) -> reverberation
+  noise_min_snr: 5.0
+  noise_max_snr: 25.0
+  p_noise: 0.5
+  p_rir: 0.3
+  p_gaussian: 0.2
+  p_gain: 0.4
+  p_pitch: 0.25
+  p_speed: 0.25
+  p_air: 0.15
+  p_mp3: 0.2                             # LOW, WAXAL audio is already MP3 (avoid double-encode)
+
+decode:
+  num_beams: 1                           # seq2seq beam width
+  max_new_tokens: 225                    # seq2seq generation cap
+  # CTC decoding (pyctcdecode). Greedy when lm=null AND ctc_beam_width<=1. KenLM = Linux/WSL2 only.
+  ctc_beam_width: 1                      # >1 enables pyctcdecode beam search (works even without an LM)
+  lm: null                               # KenLM .arpa/.bin: a single path, OR {lin: .., sna: .., lug: ..} per-language
+  lm_alpha: 0.5                          # LM weight, tune on val (build with scripts/build_kenlm.py)
+  lm_beta: 1.5                           # word-insertion bonus, tune on val
+
+normalize:
+  lowercase: true
+  nfc: true
+  strip_punct: true
+  collapse_ws: true
+  unify_luganda: null                    # H3: null | "ng'" | "ŋ", unify Luganda velar-nasal spelling
+                                         # (data: lug uses ng' x2199, ŋ x180, ᵑ x25). Off by default; ablated.
+                                         # digit policy intentionally omitted: only 176/38199 rows (0.46%) have digits.
+
+infer:
+  language_from_id: true                 # Phase 1: parse lang from ID prefix; Phase 2: false
+  audio_dir: null                        # Phase 2: dir of <id>.* audio files; null -> HF test split (Phase 1)

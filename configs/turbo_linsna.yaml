@@ -1,0 +1,91 @@
+# Whisper-large-v3-turbo on Lingala and Shona, stage 1.  name: turbo_linsna
+#
+# The one sequence-to-sequence model trained for this solution; every other arm we trained is a
+# w2v-BERT CTC model, so this one fails differently, which is what a character vote needs.
+#
+# FULL FINE-TUNE, NOT LORA. Full FT beats LoRA on quality and avoids PEFT adapter plumbing in the
+# infer/evaluate paths. Three epochs at 1.0e-5, an order of magnitude below the CTC arms: this base
+# is already a competent multilingual model, so the aim is to move it into the WAXAL recording
+# domain rather than to teach it the languages. Augmentation is off and targets are RAW (see the
+# normalize block near the end).
+#
+# NOT PUBLISHED on its own. This is stage 1 of two: configs/turbo_linsna_r.yaml continues it for one
+# epoch at a lower learning rate, and that stage-2 checkpoint is the published
+# anyantudre/waxal-whisper-turbo-linsna.
+
+data:
+  # lin and sna load from HF so load_splits can carve the canonical SPEAKER-DISJOINT holdout; the
+  # WAXAL Phase-1 test gold rows arrive via the external manifest below.
+  languages: [lin, sna]
+  max_duration_s: 30.0                    # Whisper's input window; longer clips are truncated anyway
+  min_duration_s: 1.0
+  min_chars_per_sec: 1.0
+  max_chars_per_sec: 25.0
+  # OOM-KILLED TWICE at 48G and 80G on a 92G node. The corpus grew from ~20k to 47,758 rows, and with
+  # keep_in_memory the Arrow table lives in the parent process while 8 forked dataloader workers touch
+  # its pages: refcounting defeats copy-on-write, so RSS multiplies. Disk is the cheap resource now
+  # (91G free after the reclaim); a memory-mapped cache is SHARED by the workers instead of copied.
+  map_in_memory: false
+  map_num_proc: null                      # REQUIRED: per_example_language mutates global tokenizer
+                                          # prefix state, which would race across map workers
+  external:
+    - {local: data/waxal_test/manifest_test.tsv, audio_col: audio, text_col: transcription, sep: "	"}
+
+model:
+  type: seq2seq
+  id: openai/whisper-large-v3-turbo
+  language: null                           # do NOT set one global language, see per_example_language
+  task: transcribe
+  gradient_checkpointing: true
+  # THE CRITICAL SETTING. Turbo carries genuine Whisper language tokens for Lingala (`<|ln|>`) and
+  # Shona (`<|sn|>`), and each example has to train under its own. With this false, every example
+  # trains under ONE token while inference forces a different one: a silent train/test mismatch that
+  # would read as a mediocre model rather than a broken one.
+  per_example_language: true
+
+train:
+  per_device_batch_size: 4                # 809M + grad checkpointing on a 32GB card
+  grad_accum: 8                           # effective batch 32
+  lr: 1.0e-5                              # 10x LOWER than our CTC arms: this base is already competent,
+                                          # so we are nudging it toward a domain, not teaching languages.
+                                          # A higher LR here erodes the pretraining we are paying for.
+  warmup_ratio: 0.1
+  num_epochs: 3                           # deliberately short: a longer run would overfit and erode
+                                          # the multilingual pretraining we are paying for
+  eval_steps: 400
+  save_steps: 400                         # must be a multiple of eval_steps for load_best_model_at_end
+  eval_max_samples: 300                   # generation eval is expensive on a seq2seq decoder
+  save_total_limit: 1                     # DISK: ~18G per checkpoint against a 250G quota
+  dataloader_num_workers: 4               # halved: each worker is a separate mmap reader
+  fp16: false
+  bf16: true
+
+augment:
+  enabled: false                          # MCT helped our CTC arms, but this base's value IS its
+                                          # generalisation; injecting noise risks fighting the very
+                                          # pretraining we are trying to preserve
+
+decode:
+  num_beams: 1
+  max_new_tokens: 200
+
+infer:
+  language_from_id: false                 # Phase-2 ids are opaque
+
+# PUNCTUATED TARGETS: the fix this arm exists for. Every prior arm trained on norm()-stripped targets
+# (lowercase, no punctuation) while the leaderboard scores CER against RAW references; the FT of
+# Sunbird-51 emitted 0% punctuation vs the base's 99.7% BECAUSE WE TRAINED IT TO. WAXAL transcriptions
+# carry full casing+punctuation, Sunbird's pretraining is punctuated, and the top Phase-1 models on HF
+# (sulaimank/*-punct-v2, Zindi 0.9410 on the card) are punctuation models. Keep targets raw.
+normalize:
+  lowercase: false
+  strip_punct: false
+  nfc: true
+  collapse_ws: true
+
+# WHISPER-TURBO on lin/sna. The objection that killed turbo for the OLD test set does not apply here:
+# turbo has GENUINE Whisper language tokens for Lingala (<|ln|>) and Shona (<|sn|>): no remapped
+# slots, no proxy languages. At 809M it trains ~2x faster than Sunbird-51's 1.5B, and it gives the
+# ensemble a second STRONG family (the s51 member is zero-shot and is the current weakest leg).
+# CORPUS: WAXAL lin/sna train + the public P1-test gold rows. AfriVoice is deliberately EXCLUDED, 
+# at 63k rows the cached-waveform map hit 86G and killed the run while saving a checkpoint.

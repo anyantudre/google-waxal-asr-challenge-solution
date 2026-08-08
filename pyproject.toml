@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waxal_asr"
+version = "1.0.0"
+description = "Automatic speech recognition for Lingala and Shona: winning solution for the Google WAXAL ASR Challenge"
+authors = [{ name = "Alban Nyantudre" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.7",
+    "transformers>=4.50",
+    "datasets>=3.0",
+    "jiwer>=3.0",
+    "rapidfuzz>=3.0",
+    "soundfile>=0.12",
+    "librosa>=0.10",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+    "huggingface-hub>=0.25",
+    "audiomentations>=0.37",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+waxal-predict = "waxal_asr.modeling.predict:main"
+waxal-train = "waxal_asr.modeling.train:main"
+waxal-lid = "waxal_asr.lid:main"
+
+[tool.setuptools.packages.find]
+include = ["waxal_asr*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
