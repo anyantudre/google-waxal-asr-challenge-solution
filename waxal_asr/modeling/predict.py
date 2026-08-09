@@ -154,18 +154,52 @@ def transcribe_arm(arm: str, penalty: float, ids: list[str], audio_dir: Path,
     return predictions
 
 
-def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path) -> dict[str, str]:
-    """Transcribe with every member of a recipe and combine them.
+def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path,
+               recipes: dict | None = None, _seen: tuple = ()) -> dict[str, str]:
+    """Build one recipe and return its transcripts.
+
+    A recipe combines either models or other recipes:
+
+    * ``members`` lists arms. Each is decoded, then combined by character-level ROVER.
+    * ``ensembles`` lists other recipe names. Each is built in full, then their finished
+      transcripts are combined by the same vote. This second level averages over complete
+      ensembles rather than over models, which reduces variance rather than bias.
 
     Args:
         recipe: one entry from the ``recipes`` mapping.
         defaults: the ``defaults`` mapping, supplying the vote threshold and skeleton.
         ids: clip identifiers to transcribe.
         audio_dir: directory holding the audio.
+        recipes: the full recipe mapping, required only when ``ensembles`` is used.
+        _seen: recipe names already being built, used to reject a cycle.
 
     Returns:
         Mapping of clip identifier to the combined, post-processed transcript.
+
+    Raises:
+        SystemExit: if a recipe names itself in a cycle, or defines neither key.
     """
+    threshold = float(recipe.get("vote_threshold", defaults.get("vote_threshold", 2.0)))
+    skeleton = recipe.get("skeleton", defaults.get("skeleton", "anchor"))
+
+    if "ensembles" in recipe:
+        names = recipe["ensembles"]
+        print(f"[predict] meta recipe over {len(names)} ensembles: {', '.join(names)}")
+        outputs, weights = [], []
+        for name in names:
+            if name in _seen:
+                raise SystemExit(f"recipe cycle: {' -> '.join((*_seen, name))}")
+            if not recipes or name not in recipes:
+                raise SystemExit(f"unknown ensemble {name!r} referenced by a meta recipe")
+            outputs.append(run_recipe(recipes[name], defaults, ids, audio_dir, recipes,
+                                      (*_seen, name)))
+            weights.append(1.0)
+        combined = {c: _combine([o[c] for o in outputs], weights, threshold, skeleton) for c in ids}
+        return {c: postprocess(t) for c, t in combined.items()}
+
+    if "members" not in recipe:
+        raise SystemExit("a recipe must define either members or ensembles")
+
     members = recipe["members"]
     print(f"[predict] recipe with {len(members)} member(s), anchor is {members[0]['arm']}")
     arms = [
@@ -176,9 +210,9 @@ def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path) ->
     if len(arms) == 1:
         return dict(arms[0])
 
-    threshold = float(recipe.get("vote_threshold", defaults.get("vote_threshold", 2.0)))
-    skeleton = recipe.get("skeleton", defaults.get("skeleton", "anchor"))
-    weights = [1.0] * len(arms)
+    # A member may carry less than a full vote. Down-weighting a weak arm keeps the decorrelation
+    # it contributes while limiting the damage it can do, which removing it entirely would lose.
+    weights = [float(m.get("weight", 1.0)) for m in members]
     combined = {
         clip: _combine([arm[clip] for arm in arms], weights, threshold, skeleton) for clip in ids
     }
@@ -204,7 +238,11 @@ def main() -> None:
         for name, recipe in recipes.items():
             score = recipe.get("public_score")
             score_text = f"public {score}" if score else "not submitted"
-            print(f"  {name:18} {len(recipe['members']):2} member(s)  {score_text}"
+            if "ensembles" in recipe:
+                size = f"{len(recipe['ensembles']):2} ensembles"
+            else:
+                size = f"{len(recipe['members']):2} member(s)"
+            print(f"  {name:18} {size}  {score_text}"
                   f"  {recipe.get('description', '')}")
         return
 
@@ -218,7 +256,7 @@ def main() -> None:
     ids = read_test_ids(args.test_csv)
     print(f"[predict] {len(ids)} clips, recipe {args.recipe}")
 
-    rows = run_recipe(recipes[args.recipe], defaults, ids, args.audio_dir)
+    rows = run_recipe(recipes[args.recipe], defaults, ids, args.audio_dir, recipes)
     validate(rows, ids)
     write_submission(rows, ids, args.out)
 

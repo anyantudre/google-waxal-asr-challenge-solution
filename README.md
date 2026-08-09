@@ -3,7 +3,8 @@
 Username: anyantudre
 
 Automatic speech recognition for **Lingala**, **Shona** and **Luganda**, built on the WAXAL corpus.
-Best public leaderboard score **0.766563** (CER 0.108364, WER 0.358509).
+Best public leaderboard score **0.766683** (CER 0.108386, WER 0.358249), from the recipe
+`p2n_meta`.
 
 The competition covers all three languages. Open-set language identification with two independent
 models over the whole of the corrected Phase 2 test set found it to be roughly half Lingala and half
@@ -65,7 +66,7 @@ data/                 Not in the repository; every subdirectory is created on de
   processed/          The final submission CSV
 docs/                 Solution write-up, inference guide, conventions
   SOLUTION.md         The detailed account, and every published number with its provenance
-  model_cards/        Cards for the nine checkpoints, and dataset_card.md for the corpus;
+  model_cards/        Cards for the eleven checkpoints, and dataset_card.md for the corpus;
                       kept here because the Hub repositories are private or gated
 models/               Downloaded or trained weights, also created on demand
 tests/                Test suite, runs without a GPU or any downloads
@@ -226,11 +227,20 @@ make recipes
 
 | recipe | members | public score |
 |---|---|---|
-| `p2n_ens_masked` | 26 | **0.766563**, the best result, run by `make submission` |
-| `p2n_ens_distil` | 26 | 0.764915, the same members with an earlier decoding path |
+| `p2n_meta` | 5 ensembles | **0.766683**, the best result, run by `make submission` |
+| `p2n_ens_weighted` | 26 | 0.766580, the two weakest members at half weight |
+| `p2n_ens_masked` | 26 | 0.766563 |
+| `p2n_ens_s46swap` | 26 | 0.766477, seed 46 in place of the weakest arm |
+| `p2n_ens_soup6` | 26 | 0.766226, the six-way soup in place of the five-way |
+| `p2n_ens_wide` | 38 | 0.765960, penalties widened to 0.5 and 2.5 |
+| `p2n_ens_distil` | 26 | 0.764915, an earlier decoding path, kept as a fixed reference |
 | `p2n_ens_bp25` | 25 | 0.764759, without the distilled arm |
 | `p2n_ens_bp10` | 17 | 0.764476 |
 | `p2n_distil_nl_f` | 1 | 0.746787, the strongest single checkpoint, run by `make predict` |
+
+A recipe lists either models or other recipes. `p2n_meta` is the second kind: it votes over five
+complete ensembles rather than over models. Member-level averaging reduces bias; a second level over
+finished ensembles reduces variance.
 
 `make submission` runs `p2n_ens_distil`. To run another, call the module directly:
 
@@ -289,7 +299,7 @@ nothing in the package hardcodes a language, and retargeting is described in
 
 # Models
 
-Nine checkpoints are published, named `waxal-<architecture>-<languages>-<variant>` so the languages
+Eleven checkpoints are published, named `waxal-<architecture>-<languages>-<variant>` so the languages
 a checkpoint covers are readable from its name. One third-party model is used zero-shot.
 
 | checkpoint | languages | role | card |
@@ -302,6 +312,8 @@ a checkpoint covers are readable from its name. One third-party model is used ze
 | `waxal-w2vbert-linsna-afrivoicemix` | ln, sn | the mixed-curriculum counter-experiment | [card](docs/model_cards/waxal-w2vbert-linsna-afrivoicemix.md) |
 | `waxal-w2vbert-linsna-soup5` | ln, sn | five-way weight average | [card](docs/model_cards/waxal-w2vbert-linsna-soup5.md) |
 | `waxal-w2vbert-linsna-distilled` | ln, sn | strongest single checkpoint, see its disclosure | [card](docs/model_cards/waxal-w2vbert-linsna-distilled.md) |
+| `waxal-w2vbert-linsna-seed46` | ln, sn | fresh seed, the most decorrelated arm | [card](docs/model_cards/waxal-w2vbert-linsna-seed46.md) |
+| `waxal-w2vbert-linsna-soup6` | ln, sn | six-way weight average | [card](docs/model_cards/waxal-w2vbert-linsna-soup6.md) |
 | `waxal-whisper-turbo-linsna` | ln, sn | architectural diversity, long-form windowing | [card](docs/model_cards/waxal-whisper-turbo-linsna.md) |
 
 # Testing

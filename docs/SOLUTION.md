@@ -7,8 +7,8 @@ this file. Nothing here is estimated: each number is a leaderboard result, a log
 evaluation, or a corpus build statistic. If a fact is not recorded here, it must not be asserted in
 the documentation.
 
-The headline result is the recipe `p2n_ens_masked`: public leaderboard **0.766563** (CER 0.108364,
-WER 0.358509). It is a 26-member character-level ROVER vote over the arms listed below, each decoded
+The headline result is the recipe `p2n_meta`: public leaderboard **0.766683** (CER 0.108386,
+WER 0.358249). It is a 26-member character-level ROVER vote over the arms listed below, each decoded
 at one of several blank penalties. A second recipe, `p2n_ens_distil`, reproduces an earlier
 configuration at 0.764915 and is kept as a fixed reference point for checking an installation. The
 difference between them is decoding, not training, and is explained under [Results](#results).
@@ -402,7 +402,8 @@ Both effects are measurable end to end on the same 26-member ensemble:
 |---|---|---|---|
 | unmasked blank-penalty members, Whisper arm decoded as CTC | 0.764915 | 0.108961 | 0.361209 |
 | masked, Whisper arm still decoded as CTC | 0.766253 | 0.108407 | 0.359087 |
-| **masked, Whisper arm decoded as a generator** | **0.766563** | **0.108364** | **0.358509** |
+| masked, Whisper arm decoded as a generator | 0.766563 | 0.108364 | 0.358509 |
+| **a vote over five such ensembles** | **0.766683** | **0.108386** | **0.358249** |
 
 Together they are worth 0.001648 with no additional training. That is about 1.3 standard errors on
 the public split, so the size is not decisive on its own. Two things argue the effect is real:
@@ -411,6 +412,42 @@ altering roughly half of all transcripts rather than a handful.
 
 `p2n_ens_masked` is the recipe to prefer. `p2n_ens_distil` is retained because it reproduces an
 earlier configuration exactly, which is useful for verifying the pipeline against a known result.
+
+## Averaging over ensembles rather than over models
+
+A recipe here combines either models or other recipes. The second kind builds several complete
+ensembles and votes over their finished transcripts, which is a different operation from adding more
+members to one vote and it is worth separating.
+
+Adding members reduces bias: more opinions on each character slot. That has a limit, and this
+solution reached it. Twenty-six members is an optimum, measured from both directions:
+
+| members | score |
+|---|---|
+| 17 | 0.764476 |
+| 25 | 0.766374 |
+| **26** | **0.766580** |
+| 38 | 0.765960 |
+| 42 | 0.765247 |
+| 43 | 0.764912 |
+
+Past 26 the additions are weaker decodes of checkpoints already present, and a weak member does not
+merely fail to help, it votes. Below 26 the ensemble loses sources it needs.
+
+Averaging over finished ensembles reduces variance instead. Five 26-to-38 member ensembles, each
+using the correct forward pass but differing in which checkpoints fill the slots and in how much
+weight the two weakest members carry, were combined by the same character vote. That is `p2n_meta`,
+at 0.766683, and it has the lowest word error rate of anything measured here.
+
+Two properties matter more than the score. The inputs were included regardless of their own results,
+two of the five being worse than the best single ensemble, so the average selects nothing. And the
+operation converged: extending the vote from five ensembles to seven produced a byte-identical file.
+That convergence is the clearest evidence available that the configuration space is exhausted.
+
+Eleven configuration changes were measured after the decoding corrections, and every one landed
+inside the noise band described below. A system whose every remaining lever moves it by less than
+its measurement error is finished, and further search on a 268 clip public split is more likely to
+fit noise than to find anything.
 
 ## Measurement discipline
 

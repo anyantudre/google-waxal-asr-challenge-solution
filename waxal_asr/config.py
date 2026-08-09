@@ -47,6 +47,8 @@ ENSEMBLE_ARMS = {
     "p1av": f"{HF_NAMESPACE}/waxal-w2vbert-linsna-afrivoicemix",
     "distil": f"{HF_NAMESPACE}/waxal-w2vbert-linsna-distilled",
     "turbo_linsna_r": f"{HF_NAMESPACE}/waxal-whisper-turbo-linsna",
+    "s46": f"{HF_NAMESPACE}/waxal-w2vbert-linsna-seed46",
+    "soup6": f"{HF_NAMESPACE}/waxal-w2vbert-linsna-soup6",
 }
 
 # Third-party models used without fine-tuning. Sunbird-51 is pinned because its card states the

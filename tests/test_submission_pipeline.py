@@ -129,9 +129,19 @@ class TestRecipes:
         doc = yaml.safe_load(RECIPES_FILE.read_text(encoding="utf-8"))
         arms, recipes = doc["arms"], doc["recipes"]
 
-        used = {m["arm"] for r in recipes.values() for m in r["members"]}
+        used = {m["arm"] for r in recipes.values() for m in r.get("members", [])}
         undocumented = used - set(arms)
         assert not undocumented, f"arms used but not described: {sorted(undocumented)}"
+
+        # A meta recipe combines other recipes rather than models, so its references must resolve
+        # or the recipe cannot be built at all.
+        for name, r in recipes.items():
+            assert ("members" in r) != ("ensembles" in r), (
+                f"{name} must define exactly one of members or ensembles"
+            )
+            for ref in r.get("ensembles", []):
+                assert ref in recipes, f"{name} references unknown recipe {ref}"
+                assert ref != name, f"{name} references itself"
 
         for name, entry in arms.items():
             assert entry.get("repo"), f"{name} has no repo"

@@ -162,7 +162,7 @@ def _load_audio_for_ids(ids, cfg):
     for lang in cfg.data.languages:
         # test AUDIO only: select_columns drops `transcription`, so the leaked Phase-1 test labels
         # are never even loaded into the process (auditable no-leak guarantee). Streaming pulls only
-        # the `test` shards. Inherits the HF_HUB_DOWNLOAD_TIMEOUT set by slurm_train.sh.
+        # the `test` shards. Honours HF_HUB_DOWNLOAD_TIMEOUT when it is set in the environment.
         ds = load_dataset(cfg.data.hf_dataset, cfg.data.configs[lang], split="test",
                           streaming=True).select_columns(["id", "audio"]).cast_column(
                           "audio", Audio(sampling_rate=sr))

@@ -60,6 +60,12 @@ arms:
     repo: anyantudre/waxal-whisper-turbo-linsna
     note: Whisper large-v3-turbo, architectural diversity, generated greedily at 200 tokens;
       unlike the Sunbird arm it does not window, so clips past 30 seconds are truncated
+  s46:
+    repo: anyantudre/waxal-w2vbert-linsna-seed46
+    note: fresh seed 46 on the seed-43 corpus, the most decorrelated arm here, holdout 0.2588
+  soup6:
+    repo: anyantudre/waxal-w2vbert-linsna-soup6
+    note: the five soup members plus the distilled arm, averaged uniformly
   sunbird51:
     repo: Sunbird/asr-whisper-51-african-languages
     note: third party, zero-shot, pinned to revision 5d4f0038, beam 8, language routed
@@ -214,6 +220,164 @@ recipes:
       - {arm: p1av}
       - {arm: turbo_linsna_r}
       - {arm: distil}
+
+  # The five ensembles that the meta recipe below votes over. Each is a complete 26 or 38 member
+  # vote in its own right, and each uses the correct forward pass throughout. They differ in which
+  # checkpoints fill the slots and in how much weight the two weakest members carry, so their errors
+  # are not identical, which is what makes averaging them worth anything.
+
+  p2n_ens_weighted:
+    description: 26 members, the two weakest at half weight
+    public_score: 0.766580
+    members:
+      - {arm: s43}   # anchor
+      - {arm: s43, blank_penalty: 1.5}
+      - {arm: s43, blank_penalty: 1.0}
+      - {arm: s43, blank_penalty: 2.0}
+      - {arm: p1raw, blank_penalty: 1.5}
+      - {arm: p1raw, blank_penalty: 1.0}
+      - {arm: p1raw, blank_penalty: 2.0}
+      - {arm: linspec_r, blank_penalty: 1.5}
+      - {arm: linspec_r, blank_penalty: 1.0}
+      - {arm: linspec_r, blank_penalty: 2.0}
+      - {arm: snaspec_r, blank_penalty: 1.5}
+      - {arm: snaspec_r, blank_penalty: 1.0}
+      - {arm: snaspec_r, blank_penalty: 2.0}
+      - {arm: s44, blank_penalty: 1.5}
+      - {arm: s44, blank_penalty: 1.0}
+      - {arm: s44, blank_penalty: 2.0}
+      - {arm: soup5, blank_penalty: 1.5}
+      - {arm: soup5, blank_penalty: 1.0}
+      - {arm: soup5, blank_penalty: 2.0}
+      - {arm: s44}
+      - {arm: soup5}
+      - {arm: p1raw}
+      - {arm: sunbird51, weight: 0.5}
+      - {arm: p1av, weight: 0.5}
+      - {arm: turbo_linsna_r}
+      - {arm: distil}
+
+  p2n_ens_soup6:
+    description: 26 members, the six-way soup in place of the five-way
+    public_score: 0.766226
+    members:
+      - {arm: s43}   # anchor
+      - {arm: s43, blank_penalty: 1.5}
+      - {arm: s43, blank_penalty: 1.0}
+      - {arm: s43, blank_penalty: 2.0}
+      - {arm: p1raw, blank_penalty: 1.5}
+      - {arm: p1raw, blank_penalty: 1.0}
+      - {arm: p1raw, blank_penalty: 2.0}
+      - {arm: linspec_r, blank_penalty: 1.5}
+      - {arm: linspec_r, blank_penalty: 1.0}
+      - {arm: linspec_r, blank_penalty: 2.0}
+      - {arm: snaspec_r, blank_penalty: 1.5}
+      - {arm: snaspec_r, blank_penalty: 1.0}
+      - {arm: snaspec_r, blank_penalty: 2.0}
+      - {arm: s44, blank_penalty: 1.5}
+      - {arm: s44, blank_penalty: 1.0}
+      - {arm: s44, blank_penalty: 2.0}
+      - {arm: soup6, blank_penalty: 1.5}
+      - {arm: soup6, blank_penalty: 1.0}
+      - {arm: soup6, blank_penalty: 2.0}
+      - {arm: s44}
+      - {arm: soup6}
+      - {arm: p1raw}
+      - {arm: sunbird51, weight: 0.5}
+      - {arm: p1av, weight: 0.5}
+      - {arm: turbo_linsna_r}
+      - {arm: distil}
+
+  p2n_ens_s46swap:
+    description: 26 members, seed 46 in place of the weakest arm
+    public_score: 0.766477
+    members:
+      - {arm: s43}   # anchor
+      - {arm: s43, blank_penalty: 1.5}
+      - {arm: s43, blank_penalty: 1.0}
+      - {arm: s43, blank_penalty: 2.0}
+      - {arm: p1raw, blank_penalty: 1.5}
+      - {arm: p1raw, blank_penalty: 1.0}
+      - {arm: p1raw, blank_penalty: 2.0}
+      - {arm: linspec_r, blank_penalty: 1.5}
+      - {arm: linspec_r, blank_penalty: 1.0}
+      - {arm: linspec_r, blank_penalty: 2.0}
+      - {arm: snaspec_r, blank_penalty: 1.5}
+      - {arm: snaspec_r, blank_penalty: 1.0}
+      - {arm: snaspec_r, blank_penalty: 2.0}
+      - {arm: s44, blank_penalty: 1.5}
+      - {arm: s44, blank_penalty: 1.0}
+      - {arm: s44, blank_penalty: 2.0}
+      - {arm: soup5, blank_penalty: 1.5}
+      - {arm: soup5, blank_penalty: 1.0}
+      - {arm: soup5, blank_penalty: 2.0}
+      - {arm: s44}
+      - {arm: soup5}
+      - {arm: p1raw}
+      - {arm: sunbird51, weight: 0.5}
+      - {arm: s46}
+      - {arm: turbo_linsna_r}
+      - {arm: distil}
+
+  p2n_ens_wide:
+    description: 38 members, the penalty bracket widened to 0.5 and 2.5
+    public_score: 0.765960
+    members:
+      - {arm: s43}   # anchor
+      - {arm: s43, blank_penalty: 1.5}
+      - {arm: s43, blank_penalty: 1.0}
+      - {arm: s43, blank_penalty: 2.0}
+      - {arm: p1raw, blank_penalty: 1.5}
+      - {arm: p1raw, blank_penalty: 1.0}
+      - {arm: p1raw, blank_penalty: 2.0}
+      - {arm: linspec_r, blank_penalty: 1.5}
+      - {arm: linspec_r, blank_penalty: 1.0}
+      - {arm: linspec_r, blank_penalty: 2.0}
+      - {arm: snaspec_r, blank_penalty: 1.5}
+      - {arm: snaspec_r, blank_penalty: 1.0}
+      - {arm: snaspec_r, blank_penalty: 2.0}
+      - {arm: s44, blank_penalty: 1.5}
+      - {arm: s44, blank_penalty: 1.0}
+      - {arm: s44, blank_penalty: 2.0}
+      - {arm: soup5, blank_penalty: 1.5}
+      - {arm: soup5, blank_penalty: 1.0}
+      - {arm: soup5, blank_penalty: 2.0}
+      - {arm: s44}
+      - {arm: soup5}
+      - {arm: p1raw}
+      - {arm: sunbird51}
+      - {arm: p1av}
+      - {arm: turbo_linsna_r}
+      - {arm: distil}
+      - {arm: s43, blank_penalty: 0.5}
+      - {arm: s43, blank_penalty: 2.5}
+      - {arm: p1raw, blank_penalty: 0.5}
+      - {arm: p1raw, blank_penalty: 2.5}
+      - {arm: linspec_r, blank_penalty: 0.5}
+      - {arm: linspec_r, blank_penalty: 2.5}
+      - {arm: snaspec_r, blank_penalty: 0.5}
+      - {arm: snaspec_r, blank_penalty: 2.5}
+      - {arm: s44, blank_penalty: 0.5}
+      - {arm: s44, blank_penalty: 2.5}
+      - {arm: soup5, blank_penalty: 0.5}
+      - {arm: soup5, blank_penalty: 2.5}
+
+  # The best result. This votes over the five finished ensembles above rather than over models.
+  # Member-level averaging reduces bias; a second level over complete ensembles reduces variance,
+  # which is what a larger held-out split rewards. The inputs are included regardless of their own
+  # scores, two of them being worse than the best single ensemble: this averages, it does not select.
+  p2n_meta:
+    description: a vote over five complete ensembles
+    public_score: 0.766683
+    cer: 0.108386
+    wer: 0.358249
+    ensembles:
+      - p2n_ens_weighted
+      - p2n_ens_masked
+      - p2n_ens_soup6
+      - p2n_ens_s46swap
+      - p2n_ens_wide
+
 
   # A single arm, for verifying the pipeline end to end without downloading every checkpoint. The
   # strongest single model, and still well below any of the ensembles above.
