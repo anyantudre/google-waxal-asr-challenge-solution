@@ -182,6 +182,44 @@ def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path,
     threshold = float(recipe.get("vote_threshold", defaults.get("vote_threshold", 2.0)))
     skeleton = recipe.get("skeleton", defaults.get("skeleton", "anchor"))
 
+    if "select" in recipe:
+        # Per-clip minimum-Bayes-risk selection. Each candidate recipe is built in full; for every
+        # clip the candidate whose transcript has the smallest mean normalised character edit
+        # distance to the judging members is kept. Selection can only choose a string a candidate
+        # actually produced, so unlike positional voting it cannot synthesise an unsupported one,
+        # and it optimises expected character error directly.
+        from rapidfuzz.distance import Levenshtein
+
+        judge = recipe.get("judged_by")
+        if not recipes or judge not in recipes or "members" not in recipes[judge]:
+            raise SystemExit("a select recipe needs judged_by naming a members recipe")
+        electorate = [
+            transcribe_arm(m["arm"], float(m.get("blank_penalty", 0.0)), ids, audio_dir,
+                           use_attention_mask=bool(m.get("attention_mask", True)))
+            for m in recipes[judge]["members"]
+        ]
+        candidates = []
+        for name in recipe["select"]:
+            if name in _seen:
+                raise SystemExit(f"recipe cycle: {' -> '.join((*_seen, name))}")
+            if name not in recipes:
+                raise SystemExit(f"unknown recipe {name!r} in select")
+            candidates.append(run_recipe(recipes[name], defaults, ids, audio_dir, recipes,
+                                         (*_seen, name)))
+        print(f"[predict] select recipe over {len(candidates)} candidates, "
+              f"judged by the {len(electorate)} members of {judge}")
+        chosen = {}
+        for clip in ids:
+            texts = [e[clip] for e in electorate]
+            best, best_i = None, 0
+            for i, cand in enumerate(candidates):
+                h = cand[clip]
+                d = sum(Levenshtein.distance(h, x) / max(len(x), 1) for x in texts)
+                if best is None or d < best:
+                    best, best_i = d, i
+            chosen[clip] = candidates[best_i][clip]
+        return chosen
+
     if "ensembles" in recipe:
         names = recipe["ensembles"]
         print(f"[predict] meta recipe over {len(names)} ensembles: {', '.join(names)}")
@@ -198,7 +236,7 @@ def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path,
         return {c: postprocess(t) for c, t in combined.items()}
 
     if "members" not in recipe:
-        raise SystemExit("a recipe must define either members or ensembles")
+        raise SystemExit("a recipe must define members, ensembles or select")
 
     members = recipe["members"]
     print(f"[predict] recipe with {len(members)} member(s), anchor is {members[0]['arm']}")
@@ -240,6 +278,8 @@ def main() -> None:
             score_text = f"public {score}" if score else "not submitted"
             if "ensembles" in recipe:
                 size = f"{len(recipe['ensembles']):2} ensembles"
+            elif "select" in recipe:
+                size = f"{len(recipe['select']):2} candidates"
             else:
                 size = f"{len(recipe['members']):2} member(s)"
             print(f"  {name:18} {size}  {score_text}"

@@ -136,12 +136,16 @@ class TestRecipes:
         # A meta recipe combines other recipes rather than models, so its references must resolve
         # or the recipe cannot be built at all.
         for name, r in recipes.items():
-            assert ("members" in r) != ("ensembles" in r), (
-                f"{name} must define exactly one of members or ensembles"
-            )
-            for ref in r.get("ensembles", []):
+            kinds = sum(k in r for k in ("members", "ensembles", "select"))
+            assert kinds == 1, f"{name} must define exactly one of members, ensembles or select"
+            for ref in [*r.get("ensembles", []), *r.get("select", [])]:
                 assert ref in recipes, f"{name} references unknown recipe {ref}"
                 assert ref != name, f"{name} references itself"
+            if "select" in r:
+                judge = r.get("judged_by")
+                assert judge in recipes and "members" in recipes[judge], (
+                    f"{name} needs judged_by naming a members recipe"
+                )
 
         for name, entry in arms.items():
             assert entry.get("repo"), f"{name} has no repo"

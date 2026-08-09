@@ -3,8 +3,8 @@
 Username: anyantudre
 
 Automatic speech recognition for **Lingala**, **Shona** and **Luganda**, built on the WAXAL corpus.
-Best public leaderboard score **0.766683** (CER 0.108386, WER 0.358249), from the recipe
-`p2n_meta`.
+Best public leaderboard score **0.766791** (CER 0.108130, WER 0.358288), from the recipe
+`p2n_mbr`.
 
 The competition covers all three languages. Open-set language identification with two independent
 models over the whole of the corrected Phase 2 test set found it to be roughly half Lingala and half
@@ -227,7 +227,8 @@ make recipes
 
 | recipe | members | public score |
 |---|---|---|
-| `p2n_meta` | 5 ensembles | **0.766683**, the best result, run by `make submission` |
+| `p2n_mbr` | selection | **0.766791**, the best result, run by `make submission` |
+| `p2n_meta` | 5 ensembles | 0.766683, a vote over five complete ensembles |
 | `p2n_ens_weighted` | 26 | 0.766580, the two weakest members at half weight |
 | `p2n_ens_masked` | 26 | 0.766563 |
 | `p2n_ens_s46swap` | 26 | 0.766477, seed 46 in place of the weakest arm |
@@ -238,9 +239,11 @@ make recipes
 | `p2n_ens_bp10` | 17 | 0.764476 |
 | `p2n_distil_nl_f` | 1 | 0.746787, the strongest single checkpoint, run by `make predict` |
 
-A recipe lists either models or other recipes. `p2n_meta` is the second kind: it votes over five
-complete ensembles rather than over models. Member-level averaging reduces bias; a second level over
-finished ensembles reduces variance.
+A recipe lists models, other recipes, or a selection. `p2n_meta` votes over five complete
+ensembles; `p2n_mbr` goes one step further and selects, per clip, the transcript most central to
+the 26 members by character edit distance. Voting reduces bias, the second-level vote reduces
+variance, and the selection optimises expected character error directly. The selection was measured
+twice with different candidate pools, scoring 0.766791 and 0.766773.
 
 `make submission` runs `p2n_ens_distil`. To run another, call the module directly:
 

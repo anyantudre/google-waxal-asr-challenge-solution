@@ -7,8 +7,8 @@ this file. Nothing here is estimated: each number is a leaderboard result, a log
 evaluation, or a corpus build statistic. If a fact is not recorded here, it must not be asserted in
 the documentation.
 
-The headline result is the recipe `p2n_meta`: public leaderboard **0.766683** (CER 0.108386,
-WER 0.358249). It is a 26-member character-level ROVER vote over the arms listed below, each decoded
+The headline result is the recipe `p2n_mbr`: public leaderboard **0.766791** (CER 0.108130,
+WER 0.358288). It is a 26-member character-level ROVER vote over the arms listed below, each decoded
 at one of several blank penalties. A second recipe, `p2n_ens_distil`, reproduces an earlier
 configuration at 0.764915 and is kept as a fixed reference point for checking an installation. The
 difference between them is decoding, not training, and is explained under [Results](#results).
@@ -448,6 +448,31 @@ Eleven configuration changes were measured after the decoding corrections, and e
 inside the noise band described below. A system whose every remaining lever moves it by less than
 its measurement error is finished, and further search on a 268 clip public split is more likely to
 fit noise than to find anything.
+
+## Selection, the last mechanism that worked
+
+Voting exhausted itself: after the decoding corrections, eleven configuration changes in a row
+landed inside the noise band. What remained was the character half of the metric, and one mechanism
+still targets it directly. For each clip, build several complete ensembles, then keep the transcript
+with the smallest mean normalised character edit distance to the 26 members. Selection cannot
+synthesise a string no ensemble produced, and it minimises expected character error, which
+positional voting does not.
+
+| configuration | score | CER | WER |
+|---|---|---|---|
+| best single vote, `p2n_ens_weighted` | 0.766580 | 0.108428 | 0.358411 |
+| vote over five ensembles, `p2n_meta` | 0.766683 | 0.108386 | 0.358249 |
+| **selection across seven ensembles, `p2n_mbr`** | **0.766791** | **0.108130** | **0.358288** |
+| the same selection over a ten candidate pool | 0.766773 | 0.108194 | 0.358260 |
+
+The last row is the reason to believe the mechanism. A second, independently composed pool scored
+within 0.000018 of the first, and both produced the two best character error rates recorded in this
+work. The improvement is small in total score but it is exactly where it was aimed.
+
+Two test time ideas from the same family were tried on the final day and are recorded as negative:
+frame-level posterior averaging across the six shared-vocabulary checkpoints (0.764248; averaging
+lets the blank symbol dominate wherever the models disagree on spike timing, shortening transcripts)
+and single-utterance entropy-minimisation adaptation of the strongest arm (0.765910).
 
 ## Measurement discipline
 

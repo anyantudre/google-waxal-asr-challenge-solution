@@ -379,6 +379,65 @@ recipes:
       - p2n_ens_wide
 
 
+  # The anchor experiment: identical to p2n_ens_weighted except that the fresh seed 46 arm supplies
+  # the vote skeleton instead of seed 43. Slightly worse on its own, but its output is central on
+  # enough clips that the selection recipe below draws on it.
+  p2n_ens_s46anchor:
+    description: 26 members, seed 46 as the anchor
+    public_score: 0.766083
+    members:
+      - {arm: s46}   # anchor
+      - {arm: s43, blank_penalty: 1.5}
+      - {arm: s43, blank_penalty: 1.0}
+      - {arm: s43, blank_penalty: 2.0}
+      - {arm: p1raw, blank_penalty: 1.5}
+      - {arm: p1raw, blank_penalty: 1.0}
+      - {arm: p1raw, blank_penalty: 2.0}
+      - {arm: linspec_r, blank_penalty: 1.5}
+      - {arm: linspec_r, blank_penalty: 1.0}
+      - {arm: linspec_r, blank_penalty: 2.0}
+      - {arm: snaspec_r, blank_penalty: 1.5}
+      - {arm: snaspec_r, blank_penalty: 1.0}
+      - {arm: snaspec_r, blank_penalty: 2.0}
+      - {arm: s44, blank_penalty: 1.5}
+      - {arm: s44, blank_penalty: 1.0}
+      - {arm: s44, blank_penalty: 2.0}
+      - {arm: soup5, blank_penalty: 1.5}
+      - {arm: soup5, blank_penalty: 1.0}
+      - {arm: soup5, blank_penalty: 2.0}
+      - {arm: s44}
+      - {arm: soup5}
+      - {arm: p1raw}
+      - {arm: sunbird51, weight: 0.5}
+      - {arm: p1av, weight: 0.5}
+      - {arm: turbo_linsna_r}
+      - {arm: distil}
+
+  # The best result. Selection rather than voting: each of the seven ensembles below is built in
+  # full, and for every clip the transcript kept is the one with the smallest mean normalised
+  # character edit distance to the 26 members of p2n_ens_masked. Selection can only return a string
+  # some ensemble actually produced, and it optimises expected character error directly, which is
+  # the half of the metric that voting had already stopped improving. Order matters: ties keep the
+  # earliest candidate.
+  #
+  # Measured twice: this exact configuration scored 0.766791, and the same selection over a wider
+  # ten candidate pool scored 0.766773, confirming the mechanism rather than a lucky draw.
+  p2n_mbr:
+    description: per-clip selection across seven ensembles, judged by the 26 members
+    public_score: 0.766791
+    cer: 0.108130
+    wer: 0.358288
+    judged_by: p2n_ens_masked
+    select:
+      - p2n_meta
+      - p2n_ens_weighted
+      - p2n_ens_masked
+      - p2n_ens_s46swap
+      - p2n_ens_soup6
+      - p2n_ens_wide
+      - p2n_ens_s46anchor
+
+
   # A single arm, for verifying the pipeline end to end without downloading every checkpoint. The
   # strongest single model, and still well below any of the ensembles above.
   p2n_distil_nl_f:

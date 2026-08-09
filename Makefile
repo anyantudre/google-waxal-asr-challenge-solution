@@ -63,7 +63,7 @@ predict:
 
 .PHONY: submission
 submission:
-	$(PYTHON) -m $(PROJECT).modeling.predict --recipe p2n_ens_masked
+	$(PYTHON) -m $(PROJECT).modeling.predict --recipe p2n_mbr
 
 .PHONY: recipes
 recipes:
