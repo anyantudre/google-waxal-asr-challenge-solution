@@ -474,6 +474,17 @@ frame-level posterior averaging across the six shared-vocabulary checkpoints (0.
 lets the blank symbol dominate wherever the models disagree on spike timing, shortening transcripts)
 and single-utterance entropy-minimisation adaptation of the strongest arm (0.765910).
 
+A third final-day negative deserves its own paragraph. A second round of ensemble distillation,
+trained on the transcripts of the best available ensemble rather than the earlier weaker one,
+produced the lowest holdout error ever recorded in this work, 0.2429 against 0.2746 for its
+predecessor. Substituted into the vote it scored 0.766401, slightly below the ensemble it was meant
+to improve. That makes three arms in a row whose holdout suggested a clear win and whose ensemble
+contribution was nil or negative: a retrained checkpoint at 0.2599, a fresh seed at 0.2588, and this
+one at 0.2429. The holdout is a speaker-disjoint carve of the training distribution; it measures
+similarity to that distribution, and past a certain strength every new arm is optimising that
+similarity rather than anything the vote lacks. In this work, no holdout improvement below roughly
+0.03 ever predicted an ensemble improvement, and decisions were made accordingly.
+
 ## Measurement discipline
 
 The public leaderboard covers roughly 268 clips. For a paired comparison between two similar systems

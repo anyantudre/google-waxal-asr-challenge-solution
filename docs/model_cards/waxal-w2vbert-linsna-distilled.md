@@ -83,9 +83,12 @@ Settings:
 | precision | bf16, gradient checkpointing on |
 | augmentation | on, applied in the collator |
 
-The learning rate is an order of magnitude below the one used to train an arm from the base model.
-It is refining a converged checkpoint over 4,507 rows, and a larger rate would overwrite what the
-soup already knows. Target normalization is NFC and whitespace collapse only: no lowercasing, no
+The learning rate is an order of magnitude below the one used to train an arm from the base model:
+it is refining a converged checkpoint, and a larger rate would overwrite what the soup already
+knows. A correction, found by rerunning this recipe: the two sources in the table above are joined
+by the WAXAL Lingala and Shona train split, which the configuration loads implicitly, so the run
+sees roughly 32,000 rows rather than the 4,507 the table alone suggests. The ensemble transcripts
+of the test clips are therefore a small fraction of what each epoch visits. Target normalization is NFC and whitespace collapse only: no lowercasing, no
 punctuation stripping, because CER is computed on the raw string and WER does not strip punctuation.
 Hardware: 1x NVIDIA RTX 5090 (32 GB VRAM), 32 CPU cores, 92 GB RAM.
 
