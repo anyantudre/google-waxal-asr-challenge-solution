@@ -24,7 +24,8 @@ the same external audio but sequenced, AfriVoice first and WAXAL gold last. Beca
 only intended difference, this arm is what turned a plausible curriculum heuristic into a measured
 result, and the result was negative for mixing: 0.2905 on the holdout for mixing throughout, against
 0.2785 for the sequenced Lingala specialist and 0.1616 for the sequenced Shona specialist. It is kept
-in the final ensemble as a decorrelated member, not as a strong solo model. It also inherits the parent
+in the submission's core ensembles as a decorrelated member, not as a strong solo model. It also
+inherits the parent
 checkpoint's raw character vocabulary unchanged, capitals and the punctuation CER scores included.
 
 ## Training data
@@ -121,8 +122,10 @@ By solo holdout error this is the weakest of the w2v-BERT arms in this solution,
 of it. It exists as a controlled comparison first and as an ensemble member second: its training
 distribution differs from every other arm, so its errors are correspondingly decorrelated, and source
 diversity was measured to be worth more than parameter diversity (four members from four checkpoints
-gained 0.0040, six members from two checkpoints gained 0.0006). The final submission combines 26
-character-level ROVER members, and solo strength is not the only selection criterion: the blank-penalty
+gained 0.0040, six members from two checkpoints gained 0.0006). The submission's 26-member
+character-level ROVER core scored 0.764915, and the scored final submission, recipe p2n_mbr, selects
+per clip across seven such ensembles and scored 0.766791 public and 0.772552 private. Solo strength
+is not the only criterion for membership: the blank-penalty
 re-decodes over-generate words and lose score in isolation (0.743 against 0.746 for the same
 checkpoint) while contributing +0.0104 in total, because a character vote can filter a spurious word
 and can never recover a missing one. The limit of that argument was measured as well: genuinely weak

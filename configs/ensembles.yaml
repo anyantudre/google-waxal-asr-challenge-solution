@@ -34,7 +34,7 @@
 arms:
   s43:
     repo: anyantudre/waxal-w2vbert-linsna-seed43
-    note: fresh seed 43 from w2v-bert-2.0, anchors every ensemble here
+    note: fresh seed 43 from w2v-bert-2.0, anchors every ensemble here except p2n_ens_s46anchor
   s44:
     repo: anyantudre/waxal-w2vbert-linsna-seed44
     note: fresh seed 44, adds FLEURS, Shunya and ASR Africa
@@ -78,7 +78,9 @@ defaults:
 
 recipes:
 
-  # Final submission, pick 1. The best result obtained in this competition.
+  # Final submission, pick 2, kept as the fixed reference for checking an installation: it
+  # rebuilds the historical 26-member vote exactly, including the decoding defect described
+  # above. The scored pick is p2n_mbr further down.
   p2n_ens_distil:
     description: 26 members, the blank-penalty core plus the distilled arm
     public_score: 0.764915
@@ -112,8 +114,8 @@ recipes:
       - {arm: turbo_linsna_r}
       - {arm: distil}
 
-  # Final submission, pick 2. The same core without the distilled arm, and the configuration that
-  # was tested most heavily. It differs from pick 1 by 0.000156, which is inside the noise floor.
+  # The same core without the distilled arm, and the configuration that was tested most heavily.
+  # It differs from p2n_ens_distil by 0.000156, which is inside the noise floor.
   p2n_ens_bp25:
     description: 25 members, the blank-penalty core
     public_score: 0.764759
@@ -362,7 +364,7 @@ recipes:
       - {arm: soup5, blank_penalty: 0.5}
       - {arm: soup5, blank_penalty: 2.5}
 
-  # The best result. This votes over the five finished ensembles above rather than over models.
+  # A vote over the five finished ensembles above rather than over models.
   # Member-level averaging reduces bias; a second level over complete ensembles reduces variance,
   # which is what a larger held-out split rewards. The inputs are included regardless of their own
   # scores, two of them being worse than the best single ensemble: this averages, it does not select.
@@ -413,7 +415,8 @@ recipes:
       - {arm: turbo_linsna_r}
       - {arm: distil}
 
-  # The best result. Selection rather than voting: each of the seven ensembles below is built in
+  # Final submission, pick 1, the scored result: public 0.766791, private 0.772552, second
+  # place. Selection rather than voting: each of the seven ensembles below is built in
   # full, and for every clip the transcript kept is the one with the smallest mean normalised
   # character edit distance to the 26 members of p2n_ens_masked. Selection can only return a string
   # some ensemble actually produced, and it optimises expected character error directly, which is

@@ -126,11 +126,13 @@ It has not seen Luganda; for Luganda, start from `waxal-w2vbert-linsnalug-raw`, 
 checkpoint in this family that did. The competition targets Lingala, Shona and Luganda, and the
 corrected Phase 2 test set was measured to contain only the first two.
 
-Beyond the adaptation caveat above, the ordinary ensemble caveat applies: this model is one component
-of the final submission, which combines 26 character-level ROVER members and scored 0.764915. Adding
+Beyond the adaptation caveat above, the ordinary ensemble caveat applies: this model votes in every
+core ensemble of the submission. The 26-member character-level ROVER core scored 0.764915, and the
+scored final submission, recipe p2n_mbr, selects per clip across seven such ensembles and scored
+0.766791 public and 0.772552 private. Adding
 this arm to the 25-member vote moved it from 0.764759 to 0.764915, a difference of 0.000156. On a
 public split of roughly 268 clips the standard error on a paired difference is about 0.0013, so that
-gain is **not** distinguishable from noise. It was included in the final pick on the reasoning that a
+gain is **not** distinguishable from noise. It was included on the reasoning that a
 strong, differently trained member should not hurt, not because the measurement showed it helped.
 
 ## How to load

@@ -97,8 +97,9 @@ Because one member was adapted to one specific set of 892 recordings, this avera
 that adaptation. For general Lingala or Shona use, prefer `waxal-w2vbert-linsna-soup5`, which does
 not, or `waxal-w2vbert-linsna-seed44`.
 
-This checkpoint contributes to one of the five ensembles that the best submission votes over, and it
-is published so that result can be rebuilt in full.
+This checkpoint contributes to one of the seven ensembles that the scored submission, recipe
+p2n_mbr (public 0.766791, private 0.772552), selects across, and it is published so that result can
+be rebuilt in full.
 
 ## How to load
 

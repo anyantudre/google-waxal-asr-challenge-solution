@@ -110,9 +110,11 @@ figure recorded for this checkpoint. Three of the five members are Shona-tuned o
 so the average is expected to be stronger on Shona than on Lingala, and the single figure should not
 be read as an overall error.
 
-This model is one component of an ensemble; the final submission combines 26 character-level ROVER
-members and scored 0.764915, well above this checkpoint's solo 0.746054. It appears in that ensemble
-four times: once greedily decoded and three times re-decoded at blank penalties 1.0, 1.5 and 2.0.
+This model is one component of the ensembles behind the submission. The 26-member character-level
+ROVER core scored 0.764915, well above this checkpoint's solo 0.746054, and the scored final
+submission, recipe p2n_mbr, selects per clip across seven such ensembles and scored 0.766791 public
+and 0.772552 private. This checkpoint appears in each core ensemble four times: once greedily
+decoded and three times re-decoded at blank penalties 1.0, 1.5 and 2.0.
 
 ## How to load
 

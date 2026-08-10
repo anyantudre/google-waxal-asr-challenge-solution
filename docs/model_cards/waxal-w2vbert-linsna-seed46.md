@@ -109,8 +109,9 @@ spontaneous descriptions of images, on consumer recording equipment, averaging 2
 It has not seen Luganda; for Luganda, start from `waxal-w2vbert-linsnalug-raw`, the only published
 checkpoint in this family that did.
 
-This checkpoint is one component of an ensemble. It contributes to one of the five ensembles that
-the best submission votes over, and it is published so that result can be rebuilt in full. On its
+This checkpoint is one component of an ensemble. It contributes to two of the seven ensembles that
+the scored submission, recipe p2n_mbr (public 0.766791, private 0.772552), selects across, anchoring
+one of them, and it is published so that result can be rebuilt in full. On its
 own it is an ordinary member of the family rather than the strongest one.
 
 ## How to load

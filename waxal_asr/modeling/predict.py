@@ -41,6 +41,15 @@ from waxal_asr.postprocess import postprocess
 
 RECIPES_FILE = CONFIGS_DIR / "ensembles.yaml"
 
+# Clips per forward pass for the CTC and fine-tuned Whisper arms, set once from --batch-size.
+# It is a property of the machine, not of any recipe, which is why it is module state rather
+# than a parameter threaded through the recursive recipe builder. 8 is the setting of record
+# (a 32 GB card); 4 fits in 8 GB. For the masked members the batch size does not change the
+# transcripts, only the speed. The legacy unmasked members of p2n_ens_distil are the one
+# exception: without the attention mask, padding leaks into self-attention, so their output
+# depends on how clips are grouped, and rebuilding them byte-for-byte requires the default 8.
+BATCH_SIZE = 8
+
 
 def load_recipes(path: Path = RECIPES_FILE) -> tuple[dict, dict]:
     """Read the recipe file.
@@ -148,11 +157,13 @@ def transcribe_arm(arm: str, penalty: float, ids: list[str], audio_dir: Path,
         # to penalise. Decoding it through the CTC path yields a stream of punctuation.
         from waxal_asr.modeling.whisper import transcribe_whisper
 
-        predictions = transcribe_whisper(resolve_model(arm), ids, audio_dir)
+        predictions = transcribe_whisper(resolve_model(arm), ids, audio_dir,
+                                         batch_size=BATCH_SIZE)
     else:
         from waxal_asr.modeling.ctc import transcribe_ctc
 
         predictions = transcribe_ctc(resolve_model(arm), ids, audio_dir, penalty=penalty,
+                                     batch_size=BATCH_SIZE,
                                      use_attention_mask=use_attention_mask)
 
     predictions = {clip: postprocess(text) for clip, text in predictions.items()}
@@ -266,6 +277,8 @@ def run_recipe(recipe: dict, defaults: dict, ids: list[str], audio_dir: Path,
 
 def main() -> None:
     """Command line entry point."""
+    global BATCH_SIZE
+
     parser = argparse.ArgumentParser(description="Produce a submission CSV from released weights.")
     parser.add_argument("--recipe", default="p2n_distil_nl_f",
                         help="recipe name from configs/ensembles.yaml")
@@ -274,7 +287,10 @@ def main() -> None:
     parser.add_argument("--test-csv", type=Path, default=RAW_DATA_DIR / "Test.csv")
     parser.add_argument("--out", type=Path, default=PROCESSED_DATA_DIR / "submission.csv")
     parser.add_argument("--recipes-file", type=Path, default=RECIPES_FILE)
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
+                        help="clips per forward pass; the default 8 needs a large card, 4 fits in 8 GB")
     args = parser.parse_args()
+    BATCH_SIZE = args.batch_size
 
     recipes, defaults = load_recipes(args.recipes_file)
 

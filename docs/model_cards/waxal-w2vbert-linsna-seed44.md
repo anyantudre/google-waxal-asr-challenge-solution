@@ -108,8 +108,10 @@ is the reasonable default for Lingala or Shona audio that is not photo-descripti
 that use is untested. It has not seen Luganda; for Luganda, start from
 `waxal-w2vbert-linsnalug-raw`.
 
-This model is one component of an ensemble; the final submission combines 26 character-level ROVER
-members and scored 0.764915. Solo strength is not the only selection criterion. Some members are
+This model is one component of the ensembles behind the submission. The 26-member character-level
+ROVER core scored 0.764915, and the scored final submission, recipe p2n_mbr, selects per clip across
+seven such ensembles and scored 0.766791 public and 0.772552 private. Solo strength is not the only
+criterion for membership in those core ensembles. Some members are
 deliberately weak alone, notably the blank-penalty re-decodes, which over-generate words and lose
 score in isolation (0.743 against 0.746 for the same checkpoint) while contributing +0.0104 in total,
 because a character vote can filter a spurious word and can never recover a missing one.

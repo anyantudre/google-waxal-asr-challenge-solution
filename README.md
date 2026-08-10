@@ -28,14 +28,16 @@ good its words are, and punctuation errors are charged twice, once to each metri
 vocabulary of every CTC model here includes capitals and punctuation. That change alone was worth
 0.0171 on the leaderboard.
 
-The pipeline in one paragraph. The test set is 892 clips, roughly half Lingala and half Shona. Eight
+The pipeline in one paragraph. The test set is 892 clips, roughly half Lingala and half Shona. Nine
 acoustic models are fine-tuned from `facebook/w2v-bert-2.0` and `openai/whisper-large-v3-turbo` on
 WAXAL plus five public external corpora, using a two-stage curriculum: external audio first, then a
-final low-learning-rate pass over WAXAL alone. A ninth checkpoint is a weight average of five of
-them. Each model is decoded several times with different blank penalties, which corrects a systematic
-word-dropping bias in greedy CTC decoding. The resulting 26 transcript sets, which include one
-third-party zero-shot model, are combined by character-level ROVER anchored on the seed-43 arm,
-then passed through loop collapse and sentence-case repair.
+final low-learning-rate pass over WAXAL alone. Two further checkpoints are weight averages over the
+strongest lineage. Each model is decoded several times with different blank penalties, which
+corrects a systematic word-dropping bias in greedy CTC decoding. The resulting transcript sets,
+which include one third-party zero-shot model, feed seven character-level ROVER ensembles, six
+anchored on the seed-43 arm and one on seed 46, plus a meta vote over five of them; the submission
+keeps, for every clip, the candidate transcript most central by character edit distance to the 26
+members of the corrected ensemble, then applies loop collapse and sentence-case repair.
 
 Three findings did most of the work:
 
@@ -67,13 +69,14 @@ data/                 Not in the repository; every subdirectory is created on de
   processed/          The final submission CSV
 docs/                 Solution write-up, inference guide, conventions
   SOLUTION.md         The detailed account, and every published number with its provenance
-  model_cards/        Cards for the eleven checkpoints, and dataset_card.md for the corpus;
-                      kept here because the Hub repositories are private or gated
+  dataset_card.md     The training corpus: every subset's derivation from its upstream source
+  model_cards/        Cards for the eleven checkpoints, kept here so the repository is
+                      self-contained; the same cards are published on the Hub repositories
 models/               Downloaded or trained weights, also created on demand
 tests/                Test suite, runs without a GPU or any downloads
 waxal_asr/            The package
   config.py           Paths, the model registry, YAML loading
-  data.py             Corpus construction from public sources
+  data.py             Training data loading and the speaker-disjoint holdout
   audio.py            Loading, resampling, augmentation
   normalize.py        Text normalisation policy
   vocab.py            Character vocabulary built from the training transcripts
@@ -90,12 +93,14 @@ waxal_asr/            The package
     train.py          Training entry point
     predict.py        Inference entry point
     ctc.py            Batched CTC transcription
+    whisper.py        The fine-tuned Whisper arm: greedy, truncates past 30 seconds
     sunbird.py        The third-party arm, with long-form windowing
 ```
 
 # Setup
 
-1. **Python 3.10 or newer.** The submitted result was produced with Python 3.12.13.
+1. **Python 3.11 or 3.12.** The submitted result was produced with Python 3.12.13. The pinned
+   numpy needs at least 3.11, and the pinned audiomentations does not install on 3.13.
 
 2. **Install the dependencies.**
 
@@ -157,9 +162,10 @@ used at any point.
 | Language identification over 892 clips | 25 minutes |
 | Inference, one arm over 892 clips | 20 minutes |
 | Blank-penalty re-decode, per checkpoint | 90 seconds (logits are cached, then decoded per penalty) |
-| Ensembling and post-processing | seconds |
-| **Full submission from cached arm outputs** | **under 5 minutes** |
-| **Full submission from scratch** | **about 6 hours** |
+| Ensembling, selection and post-processing | seconds |
+| Training-corpus download, `make data` | about an hour (14 GB), training only |
+| **Full submission (`p2n_mbr`) from cached arm outputs** | **under 5 minutes** |
+| **Full submission (`p2n_mbr`) from scratch, 12 checkpoints** | **about 7 hours, plus `make lid`** |
 
 Total training was roughly 80 GPU hours. The competition score can be reproduced without any of it,
 using the published weights.
@@ -176,9 +182,13 @@ steps that produced them.
    make data
    ```
 
-   This downloads and converts every source to 16 kHz mono FLAC with a manifest per corpus. Sources,
-   licences and row counts are in [Data and licences](#data-and-licences) below and in
-   [docs/SOLUTION.md](docs/SOLUTION.md). All are public. Network access is required.
+   This downloads the packaged training corpus `anyantudre/waxal-linsna` (about 14 GB: 16 kHz mono
+   FLAC, already converted, with a manifest per corpus) into `data/external`. The WaxalNLP train and
+   validation splits are not included; training reads them directly from `google/WaxalNLP`. How each
+   subset was derived from its upstream source, including the pseudo-label recipe, is documented in
+   [docs/dataset_card.md](docs/dataset_card.md). Sources, licences and row counts are in
+   [Data and licences](#data-and-licences) below and in [docs/SOLUTION.md](docs/SOLUTION.md). All
+   are public. Network access is required.
 
 2. **Train one arm.**
 
@@ -186,10 +196,18 @@ steps that produced them.
    make train ARM=s43
    ```
 
-   `ARM` is any config in `configs/`: `s43`, `s44`, `p1raw`, `linspec_r`, `snaspec_r`, `p1av`.
+   `ARM` is the config stem after `w2vbert_`: `s43`, `s44`, `p1raw`, `linspec`, `linspec_r`,
+   `snaspec`, `snaspec_r`, `p1av`. The Whisper arm's configs carry no such prefix, so train it by
+   calling the module directly with `configs/turbo_linsna.yaml` and then `configs/turbo_linsna_r.yaml`.
    The distilled arm has no config here because it trains on the ensemble's own transcripts of the
-   test clips, which only exist once the ensemble has been run; its weights are published. Weights are written to `models/<arm>/` and are roughly 2.3 GB per CTC arm, 3.2 GB for
-   the Whisper arm. Seeds are fixed per arm in the config, so a rerun reproduces the same weights.
+   test clips, which only exist once the ensemble has been run; its weights are published, and its
+   full configuration is in its model card. The seed-46 arm reruns the seed-43 configuration at
+   seed 46, and the two soup checkpoints are uniform weight averages, both documented in their
+   cards. Weights are written to `models/<arm>/` and are roughly 2.3 GB per CTC arm, 3.2 GB for
+   the Whisper arm. Seeds are fixed per arm in the config. Training is repeatable in configuration
+   but not bitwise: GPU kernel selection makes retrained weights differ (see the republished p1av
+   arm in [docs/SOLUTION.md](docs/SOLUTION.md)), which is why the published weights are the
+   reproduction path.
 
 3. **Two-stage arms.** The per-language specialists train in two passes, external audio then a WAXAL
    refresh. The order matters and was measured: mixing the corpora throughout scored 0.2905 on the
@@ -208,7 +226,7 @@ steps that produced them.
 make predict
 ```
 
-**Reproduce the submitted result**, the full 26-member ensemble:
+**Reproduce the submitted result**, recipe `p2n_mbr`, a per-clip selection across seven ensembles:
 
 ```bash
 make lid
@@ -234,6 +252,7 @@ make recipes
 | `p2n_ens_masked` | 26 | 0.766563 |
 | `p2n_ens_s46swap` | 26 | 0.766477, seed 46 in place of the weakest arm |
 | `p2n_ens_soup6` | 26 | 0.766226, the six-way soup in place of the five-way |
+| `p2n_ens_s46anchor` | 26 | 0.766083, seed 46 as the anchor, a `p2n_mbr` candidate |
 | `p2n_ens_wide` | 38 | 0.765960, penalties widened to 0.5 and 2.5 |
 | `p2n_ens_distil` | 26 | 0.764915, an earlier decoding path, kept as a fixed reference |
 | `p2n_ens_bp25` | 25 | 0.764759, without the distilled arm |
@@ -246,7 +265,7 @@ the 26 members by character edit distance. Voting reduces bias, the second-level
 variance, and the selection optimises expected character error directly. The selection was measured
 twice with different candidate pools, scoring 0.766791 and 0.766773.
 
-`make submission` runs `p2n_ens_distil`. To run another, call the module directly:
+`make submission` runs `p2n_mbr`. To run another recipe, call the module directly:
 
 ```bash
 python -m waxal_asr.modeling.predict --recipe p2n_ens_bp25
@@ -259,13 +278,15 @@ What happens during `make submission`:
 2. Each arm's transcripts are cached in `data/interim/<arm>_bp<penalty>.json`. Re-running skips any
    arm already cached, so an interrupted run resumes rather than restarting. Delete the cache to
    force a fresh decode.
-3. The transcript sets are combined by character-level ROVER with the vote threshold at 2.0,
-   anchored on the seed-43 arm, which is deliberately not the strongest one: anchoring on the
-   strongest scored 0.763419 against 0.764915. Both settings differ from the ensemble script's
-   own defaults and
-   are recorded in the recipe file.
-4. Loop collapse and sentence-case repair are applied.
-5. The result is validated before it is written: row count, identifier set, and no empty cell.
+3. Each of the seven candidate ensembles is combined by character-level ROVER with the vote
+   threshold at 2.0, six anchored on the seed-43 arm and one on seed 46; `p2n_meta` additionally
+   votes over five of them. The seed-43 anchor is deliberately not the strongest arm: anchoring on
+   the strongest scored 0.763419 against 0.764915. The threshold and the skeleton are recorded in
+   the recipe file rather than left to the vote function.
+4. For every clip, the candidate transcript with the smallest mean normalised character edit
+   distance to the 26 members of `p2n_ens_masked` is kept.
+5. Loop collapse and sentence-case repair are applied to every member and again to every voted text.
+6. The result is validated before it is written: row count, identifier set, and no empty cell.
 
 Interim files total roughly 20 MB. The final CSV is about 300 KB.
 
@@ -274,9 +295,12 @@ A general guide to running inference on new audio, including single clips and ot
 
 **Troubleshooting.**
 
-- *403 from the Hugging Face Hub.* The model repositories are gated until the competition closes.
-  Request access, or download the weights manually and set `WAXAL_MODELS_DIR`.
-- *CUDA out of memory.* Lower the batch size: `--batch-size 4`. Inference fits in 8 GB at batch 4.
+- *403 from the Hugging Face Hub.* Check the repository name and your network; the model
+  repositories are public. If the Hub is unreachable, download the weights manually and set
+  `WAXAL_MODELS_DIR`.
+- *CUDA out of memory.* Lower the batch size: `--batch-size 4`. Inference fits in 8 GB at batch 4,
+  measured on an RTX 4070; the default of 8 does not fit there. The batch size does not change the
+  transcripts of any recipe except the legacy unmasked members of `p2n_ens_distil`.
 - *No audio file found for ID.* The loader expects `data/raw/test_audio/<ID>.<ext>`. Check that the
   identifiers in `Test.csv` match the filenames.
 - *An empty cell in the submission.* One test clip is 1.01 seconds long and some models return
@@ -318,7 +342,7 @@ a checkpoint covers are readable from its name. One third-party model is used ze
 | `waxal-w2vbert-linsna-distilled` | ln, sn | strongest single checkpoint, see its disclosure | [card](docs/model_cards/waxal-w2vbert-linsna-distilled.md) |
 | `waxal-w2vbert-linsna-seed46` | ln, sn | fresh seed, the most decorrelated arm | [card](docs/model_cards/waxal-w2vbert-linsna-seed46.md) |
 | `waxal-w2vbert-linsna-soup6` | ln, sn | six-way weight average | [card](docs/model_cards/waxal-w2vbert-linsna-soup6.md) |
-| `waxal-whisper-turbo-linsna` | ln, sn | architectural diversity, long-form windowing | [card](docs/model_cards/waxal-whisper-turbo-linsna.md) |
+| `waxal-whisper-turbo-linsna` | ln, sn | architectural diversity, the one seq2seq fine-tune | [card](docs/model_cards/waxal-whisper-turbo-linsna.md) |
 
 # Testing
 
@@ -326,14 +350,17 @@ a checkpoint covers are readable from its name. One third-party model is used ze
 make test
 ```
 
-88 tests covering the metric asymmetry, the ensemble vote and its safety guards, both
+90 tests covering the metric asymmetry, the ensemble vote and its safety guards, both
 post-processing rules, the submission validator, the recipe file's contents, and the formatting
 rules this repository enforces. They use synthetic data, so they need no GPU, no model weights and
-no network access, and run in under a second.
+no network access, and run in a few seconds.
 
 # Data and licences
 
-Every source is publicly available. Licences are as published by each dataset.
+Every source is publicly available. Licences are as published by each dataset. The derived
+training corpus that `make data` downloads is published as
+[anyantudre/waxal-linsna](https://huggingface.co/datasets/anyantudre/waxal-linsna); its derivation
+from the sources below is documented in [docs/dataset_card.md](docs/dataset_card.md).
 
 | source | rows | hours | licence |
 |---|---|---|---|
@@ -386,7 +413,9 @@ load would silently change the submission.
 
 The public leaderboard covers roughly 30 per cent of the test set, about 268 clips. For a paired
 comparison between two similar systems the standard error on the score difference is about 0.0013,
-so **differences below roughly 0.0027 cannot be distinguished from noise**. The final eight
-submissions span 0.7643 to 0.7649, which is inside that band. The final two were chosen on the
-principle of maximum averaging rather than on ranking within the noise, and any claim in this
-repository that rests on a difference smaller than that is labelled as such where it appears.
+so **differences below roughly 0.0027 cannot be distinguished from noise**. The last-day candidate
+submissions span 0.7643 to 0.7668, and most neighbouring pairs in that range are inside the band.
+The two final picks were chosen on the principle of maximum averaging, the selection recipe
+`p2n_mbr` first because it also optimises expected character error directly, rather than on ranking
+within the noise, and any claim in this repository that rests on a difference smaller than the band
+is labelled as such where it appears.

@@ -8,10 +8,14 @@ evaluation, or a corpus build statistic. If a fact is not recorded here, it must
 the documentation.
 
 The headline result is the recipe `p2n_mbr`: public leaderboard **0.766791** (CER 0.108130,
-WER 0.358288). It is a 26-member character-level ROVER vote over the arms listed below, each decoded
-at one of several blank penalties. A second recipe, `p2n_ens_distil`, reproduces an earlier
-configuration at 0.764915 and is kept as a fixed reference point for checking an installation. The
-difference between them is decoding, not training, and is explained under [Results](#results).
+WER 0.358288), private leaderboard **0.772552** (CER 0.110664, WER 0.344233), **second place** of
+the competition. It is a per-clip selection across seven complete ensembles, each a 26 to 38 member
+character-level ROVER vote over the arms listed below, each arm decoded at one of several blank
+penalties; for every clip the transcript kept is the one closest in mean normalised character edit
+distance to the 26 members of the corrected vote `p2n_ens_masked`. The mechanism is described under
+[Selection](#selection-the-last-mechanism-that-worked). A second recipe, `p2n_ens_distil`,
+reproduces an earlier 26-member configuration at 0.764915 and is kept as a fixed reference point
+for checking an installation.
 
 Step-by-step instructions for running the pipeline are in [INFERENCE.md](INFERENCE.md). This document
 explains what was done and why it worked.
@@ -71,12 +75,13 @@ guarantee you cannot be surprised by the truth.
 
 ### Hardware and environment
 
-One NVIDIA RTX 5090 (32 GB VRAM), 32 CPU cores, 92 GB RAM, under a batch scheduler with a four hour
-wall-clock limit per job and checkpoint resume. Ensembling and post-processing are CPU only. No cloud
-or paid compute was used.
+One Linux workstation: NVIDIA RTX 5090 (32 GB VRAM), 32 CPU cores, 92 GB RAM, under a SLURM batch
+scheduler with a four hour wall-clock limit per job and checkpoint resume. Ensembling and
+post-processing are CPU only and ran on a laptop. No cloud or paid compute was used.
 
 Python 3.12.13, torch 2.11.0+cu128, transformers 4.57.6, datasets 3.6.0, soundfile 0.14.0,
-librosa 0.11.0, numpy 2.4.6. Seeds are fixed per arm (42, 43, 44).
+librosa 0.11.0, numpy 2.4.6; the full pin set recorded from that environment is
+`requirements.txt`. Seeds are fixed per arm (42, 43, 44, 46).
 
 ### Training data
 
@@ -118,7 +123,9 @@ speaker-disjoint carve of WAXAL train, reported as error (lower is better).
 | `linspec_r` | continues p1raw | AfriVoice Lingala, then WAXAL refresh | 3 then 1, at 3e-5 then 1e-5 | 0.2785 on Lingala |
 | `snaspec_r` | continues p1raw | AfriVoice Shona, then WAXAL refresh | 3 then 1, at 3e-5 then 1e-5 | 0.1616 on Shona |
 | `p1av` | continues p1raw | WAXAL and both AfriVoice corpora mixed throughout | 2 at 2e-5 | 0.2905 |
-| `distil` | continues soup5 | WAXAL gold, plus ensemble transcripts for the 892 test clips | 3 at 8e-6 | **0.2746**, the best single arm |
+| `distil` | continues soup5 | WAXAL gold, plus ensemble transcripts for the 892 test clips | 3 at 8e-6 | **0.2746**, the best single arm on the leaderboard (0.746787) |
+| `s46` | w2v-bert-2.0, seed 46 | as s43 (the seed-43 corpus rerun at seed 46) | 8 at 1.0e-4 | 0.2588, the best holdout of any arm, a gain that never appeared in any ensemble |
+| `soup6` | weight average | the five soup5 members plus distil | not applicable | not measured |
 | `turbo_linsna_r` | [`openai/whisper-large-v3-turbo`](https://huggingface.co/openai/whisper-large-v3-turbo) | WAXAL and Phase 1 test gold, then refresh | 3 then 1, at 1e-5 then 5e-6 | 0.2772 |
 | Sunbird 51 | [third party](https://huggingface.co/Sunbird/asr-whisper-51-african-languages), zero-shot | not fine-tuned; beam 8, language-routed | not applicable | 0.7372 on the leaderboard |
 
@@ -288,10 +295,27 @@ outcomes. Each is paired with the measurement that killed it.
 | 25 members, all strong sources: `p2n_ens_bp25` | 0.764759 | 0.109025 | 0.361457 |
 | 26 members, adds distil: `p2n_ens_distil` | 0.764915 | 0.108961 | 0.361209 |
 | **26 members, corrected decoding: `p2n_ens_masked`** | **0.766563** | **0.108364** | **0.358509** |
+| the two weakest members at half weight: `p2n_ens_weighted` | 0.766580 | not recorded | not recorded |
+| a vote over five complete ensembles: `p2n_meta` | 0.766683 | 0.108386 | 0.358249 |
+| **per-clip selection across seven ensembles: `p2n_mbr`** | **0.766791** | **0.108130** | 0.358288 |
+
+Single-ensemble variants measured on the way: seed 46 in the weakest slot (`p2n_ens_s46swap`)
+0.766477, the six-way soup in place of the five-way (`p2n_ens_soup6`) 0.766226, seed 46 as the
+anchor (`p2n_ens_s46anchor`) 0.766083, the penalty bracket widened to 38 members (`p2n_ens_wide`)
+0.765960.
 
 Negative results on the same board: 21 members including weak checkpoints 0.764152; comma
 restoration 0.764314; period-corrected ensemble 0.756972; distil as anchor rather than member
 0.763419.
+
+### Final standing
+
+The scored pick was `p2n_mbr` (file `cand_mbr.csv`). On the private 70 per cent of the test set it
+scored **0.772552** (CER 0.110664, WER 0.344233), finishing **second** of the competition; the
+winner scored 0.780944 and third place 0.771866. The second pick was `p2n_ens_distil`. The private
+score running 0.006 above the public one is expected behaviour, not luck: a 624-clip split is
+kinder to an averaged system than a 268-clip split, and the selection recipe was chosen for exactly
+that property.
 
 ### The paired comparisons
 

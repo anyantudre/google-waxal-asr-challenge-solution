@@ -22,15 +22,17 @@ This repository is the exact training corpus behind our Google WAXAL ASR Challen
 submission: the TSV manifests plus the derived 16 kHz mono FLAC audio that our training configs read.
 It exists so that the whole recipe can be rebuilt and audited from one place. The manifests below,
 together with the `google/WaxalNLP` train and validation splits read directly from upstream, are the
-training data of every fine-tuned arm we submitted with one exception, stated plainly: the
+training data of every fine-tuned arm we submitted with two exceptions, stated plainly. The
 distilled arm also trained on the 892 Phase 2 test clips, using our own ensemble's transcripts as
-targets. That is self-training on unlabeled test audio, which the organisers permit subject to
-disclosure, and no reference transcript for any test clip was used. Those derived targets are not
-redistributed here. One further ensemble member is a third-party model used zero-shot, which we
+targets: that is self-training on unlabeled test audio, which the organisers permit subject to
+disclosure, and no reference transcript for any test clip was used; those derived targets are not
+redistributed here. And the weight-averaged soup arms fold in checkpoints fine-tuned on the
+pseudo-label subsets documented in the Pseudo-labels section below, which are likewise not shipped.
+One further ensemble member is a third-party model used zero-shot, which we
 did not train at all.
 
 It is a **derived redistribution of publicly licensed corpora**. We did not record any audio. Each
-subset is a resampled, re-encoded and gated copy of an upstream public dataset, with the upstream
+subset is a resampled and re-encoded copy of an upstream public dataset, with the upstream
 transcription preserved verbatim apart from the whitespace/quote cleaning described below. Upstream
 links are listed for every source, and each source remains subject to its own upstream terms.
 
@@ -192,8 +194,9 @@ selects the kept fraction. Details in the next section.
 
 **`scripts/build_corpus.py`** and **`scripts/build_waxal_langs.py`** are earlier multi-language
 builders from the first phase of the work (they also cover Luganda and other WaxalNLP languages).
-They did not contribute any subset shipped here; they are named because they appear in the solution
-repository and a reviewer will find them.
+They did not contribute any subset shipped here; they are named for completeness and, like the
+other builders, live in the research repository that produced this corpus, not in the released
+solution package.
 
 ## Pseudo-labels, and why they are not here
 
@@ -203,9 +206,11 @@ measured negative result, so nothing in the solution depends on having them. The
 regenerable from the commands below, which is why the recipe is documented here in full.
 
 They were produced only on the WaxalNLP **unlabeled** pools for Lingala and Shona. The labelling
-models were our own per-language specialists, `w2vbert_linspec_r` for Lingala and `w2vbert_snaspec_r`
-for Shona, both of them `facebook/w2v-bert-2.0` CTC fine-tunes with the raw cased-and-punctuated
-character vocabulary. `scripts/pseudo_p2.py` streams the unlabeled parquet shards, resamples to 16 kHz, runs a
+models were our own per-language specialists, `w2vbert_linspec_r` for Lingala (published as
+`anyantudre/waxal-w2vbert-lin-specialist`) and `w2vbert_snaspec_r` for Shona (published as
+`anyantudre/waxal-w2vbert-sna-specialist`), both of them `facebook/w2v-bert-2.0` CTC fine-tunes
+with the raw cased-and-punctuated character vocabulary. The `--ckpt` paths in the commands below
+are local training output directories, interchangeable with those published repositories. `scripts/pseudo_p2.py` streams the unlabeled parquet shards, resamples to 16 kHz, runs a
 single batched CTC forward pass in bfloat16, greedy-decodes, and computes a per-clip confidence as the
 mean maximum softmax probability over the frames whose argmax is not the blank token. A clip is
 written only if its hypothesis is at least 5 characters, its confidence is at least 0.5, its duration
@@ -231,7 +236,8 @@ Negative result, stated plainly: **this self-training round did not help.** On o
 holdout the Lingala specialist went from 0.2785 to 0.2800 error and the Shona specialist moved
 0.1616 to 0.1598 and back to 0.1616, which is flat. The labelled portion of the same collection was already
 saturated. The recipe is documented because the models trained on these labels became useful
-*ensemble* members, not because the pseudo-labels improved a single model.
+ingredients of the weight-averaged *soup* arms, not because the pseudo-labels improved a single
+model.
 
 ## What is not in this repository
 

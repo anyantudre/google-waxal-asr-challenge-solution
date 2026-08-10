@@ -77,19 +77,26 @@ Per-example language conditioning is load-bearing. With one global language toke
 train under a single token while inference forces a different one, a silent train and test mismatch
 that reads as a mediocre model rather than as a broken one.
 
-The `decode` block in the training configuration (`num_beams: 1`, `max_new_tokens: 200`) is a training-time setting
-and is not the inference recipe. See below.
+The `decode` block in the training configuration (`num_beams: 1`, `max_new_tokens: 200`) is also the
+decoding of record for the submitted ensemble member. See the decoding section below.
 
-## Long-form windowing
+## Decoding of record, and the 30 second window
 
-This is the one operational difference between this arm and every CTC arm in the system, and it is not
-optional. The Phase 2 test audio averages 20.2 seconds and ranges from 1.01 to 35.2 seconds, so 3.3 per
-cent of clips run past 30 seconds, which is Whisper's entire receptive field. A plain feature-extractor
-call truncates anything longer and raises no error, so those clips would quietly lose their endings.
-Long audio is therefore decoded in overlapping windows of 28 seconds, 2 seconds of headroom below the
-limit, with 2 seconds of overlap; the same windowing implementation is used by every Whisper-family
-arm in the system. The CTC arms are convolutional and streaming over time, so they have
-no equivalent limit and no windowing.
+The submitted ensemble member was generated greedily (`num_beams: 1`) at `max_new_tokens: 200`, with
+no forced language token and **no windowing**: clips are passed to the feature extractor as they
+are, so Whisper's fixed 30 second receptive field truncates the 3.3 per cent of test clips that run
+longer (the audio averages 20.2 seconds and ranges from 1.01 to 35.2). That is what
+`waxal_asr/modeling/whisper.py` in the solution repository does, and rebuilding the submission
+requires decoding this arm exactly that way.
+
+For standalone reuse, windowing is worth having: a plain feature-extractor call truncates long audio
+and raises no error, so long clips quietly lose their endings. The third-party Sunbird arm in the
+same system decodes in overlapping windows of 28 seconds, 2 seconds of headroom below the limit,
+with 2 seconds of overlap (`waxal_asr/modeling/sunbird.py`), and that implementation applies
+unchanged to this checkpoint. The two arms differ on this deliberately: the submitted member of this
+arm predates the windowing path, and the configuration that produced it is preserved as the
+configuration of record. The CTC arms are convolutional and streaming over time, so they have no
+equivalent limit and no windowing.
 
 ## Evaluation
 
@@ -120,22 +127,28 @@ The competition targets Lingala, Shona and Luganda; the corrected Phase 2 test s
 contain only Lingala and Shona, which is why this arm was trained on those two. Whisper's own Luganda
 support is untouched by this fine-tune but was not evaluated.
 
-The model must be told which language to transcribe. In the final system that decision comes from
-open-set language identification, not from the clip identifiers, which carry no language information:
-`facebook/mms-lid-4017` called 437 of the 892 test clips Lingala at confidence 0.990 and 423 Shona at
-confidence 0.980, leaving 32 low-confidence clips and one labelled Luganda.
+The submitted member was generated without a forced language token: the model inferred the language
+per clip, matching the pipeline in the solution repository. For standalone reuse, supplying the
+token helps, and in the final system the language labels exist anyway because the third-party
+Sunbird arm is routed by open-set language identification: `facebook/mms-lid-4017` called 437 of
+the 892 test clips Lingala at confidence 0.990 and 423 Shona at confidence 0.980, leaving 32
+low-confidence clips, one of which it labelled Luganda.
 
-This model is a weak component by solo leaderboard score, and that is not by itself disqualifying. The
-final submission combines 26 character-level ROVER members, several of which are deliberately weak
+This model is a weak component by solo leaderboard score, and that is not by itself disqualifying.
+The submission's 26-member character-level ROVER core scored 0.764915, and the scored final
+submission, recipe p2n_mbr, selects per clip across seven such ensembles and scored 0.766791 public
+and 0.772552 private. Several members are deliberately weak
 alone: the blank-penalty re-decodes of the CTC arms over-generate words and lose score in isolation
 (0.743 against 0.746 for the same checkpoint) while contributing +0.0104 in total, because a character
 vote can filter a spurious word and can never recover a missing one. What such a vote needs is members
 of comparable strength with uncorrelated errors, and a Whisper-family member is uncorrelated with the
 CTC family by construction.
 
-Two decoding notes are specific to this family. Beam search matters: beam width 8 was measured at
-+0.0224 over greedy for Whisper models, so the training config's `num_beams: 1` must not be carried
-into inference. And encoder-decoder models loop: collapsing repeated runs in the output was worth
+Two decoding notes are specific to this family, and both are standalone-reuse advice rather than
+the submission recipe. Beam search helps: beam width 8 was measured at +0.0224 over greedy for
+Whisper models in this system (the Sunbird arm uses it; the submitted member of this arm was
+greedy, and rebuilding the submission must keep it greedy). And encoder-decoder models loop:
+collapsing repeated runs in the output was worth
 +0.0069 when introduced. Reduplication is lexical in both languages, so loop collapse is applied after
 generation rather than suppressed with an n-gram constraint during it.
 
@@ -152,14 +165,16 @@ processor = WhisperProcessor.from_pretrained(MODEL_ID)
 model = WhisperForConditionalGeneration.from_pretrained(MODEL_ID, torch_dtype=torch.float32).eval()
 
 wav, sr = sf.read("clip.wav")          # mono, resample to 16 kHz before this call
-# clips longer than 30 s must be split into overlapping windows before this call
 inputs = processor(wav, sampling_rate=16000, return_tensors="pt")
 
+# The settings of record, which reproduce the submitted ensemble member: greedy, no language
+# forcing, and clips past 30 seconds truncated by the feature extractor. For standalone reuse,
+# beam search (num_beams=8, +0.0224 measured), a language token from identification
+# (language="ln" or "sn", task="transcribe"), and windowing long clips all help, but each one
+# changes the output away from the submitted member.
 ids = model.generate(
     inputs.input_features,
-    language="ln",          # "ln" for Lingala, "sn" for Shona; supply from language identification
-    task="transcribe",
-    num_beams=8,
+    num_beams=1,
     max_new_tokens=200,
 )
 print(processor.batch_decode(ids, skip_special_tokens=True)[0])

@@ -7,8 +7,8 @@ for other languages and other challenges. These conventions keep it readable as 
 
 ```bash
 make dev        # install dependencies plus test and lint tools
-make test       # 88 tests, no GPU, no downloads, a few seconds
-make lint       # ruff check and format
+make test       # 90 tests, no GPU, no downloads, a few seconds
+make lint       # ruff check
 ```
 
 The test suite enforces the style rules below mechanically, so a violation fails the build rather
@@ -100,10 +100,12 @@ unless it is outvoted; swapping the anchor to the strongest arm scored 0.763419 
 
 Nothing in the package hardcodes Lingala or Shona. To target another language:
 
-1. Add a corpus builder, or reuse `build_afrivoice.py`, which takes any Hugging Face dataset with an
-   audio column and a text column.
+1. Add a corpus builder following the recipe recorded in `docs/dataset_card.md` (the builder
+   scripts themselves are not shipped in this package); any Hugging Face dataset with an audio
+   column and a text column fits the manifest format.
 2. Copy a config from `configs/` and change `data.languages` and the external manifests.
-3. Train with `make train ARM=<config name>`.
+3. Train with `make train ARM=<stem>`, where ARM is the config name after `w2vbert_`, or call
+   `python -m waxal_asr.modeling.train --config configs/<file>.yaml` directly.
 
 The character vocabulary is built from the training transcripts, so a new script or a new set of
 diacritics is handled automatically. Keep the raw vocabulary setting: it is worth 0.0171 on this

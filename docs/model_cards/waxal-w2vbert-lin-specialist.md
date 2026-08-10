@@ -103,13 +103,15 @@ only Lingala and Shona, which is why this pair of specialists covers those two.
 
 In the final system the routing decision comes from open-set language identification rather than from
 the clip identifiers, which carry no language information: `facebook/mms-lid-4017` called 437 of the
-892 test clips Lingala at confidence 0.990 and 423 Shona at confidence 0.980, leaving 32 low-confidence
-clips and one labelled Luganda. The 34 clips that either identification model declined to call Lingala
-or Shona were inspected individually and are neighbouring-language confusions rather than coverage
-gaps.
+892 test clips Lingala at confidence 0.990 and 423 Shona at confidence 0.980, leaving 32
+low-confidence clips, one of which it labelled Luganda. The 34 clips that either identification
+model (the other being `facebook/mms-lid-256`) declined to call Lingala or Shona were inspected
+individually and are neighbouring-language confusions rather than coverage gaps.
 
-This model is one component of an ensemble; the final submission combines 26 character-level ROVER
-members. Solo strength is not the only selection criterion. Some members are deliberately weak alone,
+This model is one component of the ensembles behind the submission. The 26-member character-level
+ROVER core scored 0.764915, and the scored final submission, recipe p2n_mbr, selects per clip across
+seven such ensembles and scored 0.766791 public and 0.772552 private. Solo strength is not the only
+criterion for membership in those core ensembles. Some members are deliberately weak alone,
 notably the blank-penalty re-decodes, which over-generate words and lose score in isolation (0.743
 against 0.746 for the same checkpoint) while contributing +0.0104 in total, because a character vote
 can filter a spurious word and can never recover a missing one. The limit of that argument was also

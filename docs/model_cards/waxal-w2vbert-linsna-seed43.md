@@ -16,8 +16,9 @@ base_model: facebook/w2v-bert-2.0
 
 This model was developed for the [Google WAXAL ASR Challenge](https://zindi.world/competitions/google-waxal-asr-challenge) on Zindi.
 
-`waxal-w2vbert-linsna-seed43` is a Lingala and Shona CTC model, and the **anchor of the final
-ensemble**. It is a fresh fine-tune of
+`waxal-w2vbert-linsna-seed43` is a Lingala and Shona CTC model, and it **anchors six of the seven
+ensembles** that the scored submission selects across; the seventh, `p2n_ens_s46anchor`, is anchored
+by the seed-46 arm. It is a fresh fine-tune of
 [facebook/w2v-bert-2.0](https://huggingface.co/facebook/w2v-bert-2.0), a 600M parameter encoder, at
 seed 43, with its own raw character vocabulary built from unnormalised transcripts, capitals and the
 punctuation CER scores included.
@@ -30,8 +31,9 @@ new architectures.
 
 Its role as anchor matters more than its solo score. In character-level ROVER the anchor supplies the
 skeleton, and its text survives every slot unless the members outvote it, so anchor choice moves the
-result more than any single member does. Using the stronger `distil` arm as the anchor instead scored
-0.763419, below the 0.764915 obtained with this checkpoint anchoring and `distil` voting as a member.
+result more than any single member does. Using the stronger distilled arm,
+`waxal-w2vbert-linsna-distilled`, as the anchor instead scored 0.763419, below the 0.764915 obtained
+with this checkpoint anchoring and the distilled arm voting as a member.
 
 ## Training data
 
@@ -100,8 +102,10 @@ It has not seen Luganda; for Luganda, start from `waxal-w2vbert-linsnalug-raw`, 
 checkpoint in this family that did. The competition targets Lingala, Shona and Luganda, and the
 corrected Phase 2 test set was measured to contain only the first two.
 
-This model is one component of an ensemble; the final submission combines 26 character-level ROVER
-members and scored 0.764915. Solo strength is not the only selection criterion. Some members are
+This model is one component of the ensembles behind the submission. The 26-member character-level
+ROVER core scored 0.764915, and the scored final submission, recipe p2n_mbr, selects per clip across
+seven such ensembles and scored 0.766791 public and 0.772552 private. Solo strength is not the only
+criterion for membership in those core ensembles. Some members are
 deliberately weak alone, notably the blank-penalty re-decodes, which over-generate words and lose
 score in isolation (0.743 against 0.746 for the same checkpoint) while contributing +0.0104 in total,
 because a character vote can filter a spurious word and can never recover a missing one. The limit of

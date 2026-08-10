@@ -8,9 +8,9 @@ help:
 	@echo "  make dev              Install dependencies plus test and lint tools"
 	@echo ""
 	@echo "Inference (see README section 'Run inference')"
-	@echo "  make lid              Language identification over the test audio"
+	@echo "  make lid              Language identification over the test audio, required before submission"
 	@echo "  make predict          One arm, about 2 GB and 20 minutes, verifies the pipeline"
-	@echo "  make submission       Full 26-member ensemble, the best result"
+	@echo "  make submission       The scored recipe p2n_mbr: per-clip selection across seven ensembles"
 	@echo "  make recipes          List every ensemble recipe in configs/ensembles.yaml"
 	@echo ""
 	@echo "Training (see README section 'Run training')"
@@ -79,6 +79,10 @@ analysis:
 data:
 	huggingface-cli download anyantudre/waxal-linsna --repo-type dataset --local-dir data/external
 
+# ARM is the config stem after `w2vbert_`: s43, s44, p1raw, linspec, linspec_r, snaspec,
+# snaspec_r, p1av. The Whisper arm's configs carry no such prefix; train it by calling the
+# module directly:
+#   python -m waxal_asr.modeling.train --config configs/turbo_linsna.yaml --name turbo_linsna
 ARM ?= s43
 .PHONY: train
 train:

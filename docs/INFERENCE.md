@@ -9,42 +9,50 @@ all in [SOLUTION.md](SOLUTION.md), which is the single source of truth for facts
 reasoning. Where a number appears below it is quoted from there.
 
 Nothing here requires training. Every published checkpoint is on the Hugging Face Hub and downloads
-on first use. The path is deterministic: the CTC arms decode greedily, the Whisper-based arm uses
-fixed-width beam search with sampling off, and the vote is a pure function of its members, so
+on first use. The path is deterministic: the CTC arms decode greedily (optionally with a blank
+penalty), the fine-tuned Whisper arm generates greedily, the third-party Sunbird arm uses beam
+search with sampling off, and the vote and the selection are pure functions of their members, so
 re-running a recipe on the same weights and the same audio reproduces the same CSV. Seeds are fixed
-per arm (42, 43, 44); they matter for training, not for this path.
+per arm (42, 43, 44, 46); they matter for training, not for this path.
 
 ## 1. The recorded submissions
 
-Four recipes are recorded, each named after the submission file that was sent to Zindi, so a recipe
-maps to exactly one leaderboard row.
+Twelve recipes are recorded, each named after the submission file that was sent to Zindi, so a
+recipe maps to exactly one leaderboard row. The ones a reader is most likely to want:
 
-| recipe | members | public score | CER | WER |
+| recipe | shape | public score | CER | WER |
 |---|---|---|---|---|
-| **`p2n_ens_distil`** | 26 | **0.764915** | 0.108961 | 0.361209 |
-| `p2n_ens_bp25` | 25 | 0.764759 | 0.109025 | 0.361457 |
-| `p2n_ens_bp10` | 17 | 0.764476 | 0.108578 | 0.362471 |
-| `p2n_distil_nl_f` | 1 | 0.746787 | 0.113117 | 0.393308 |
+| **`p2n_mbr`** | selection over 7 ensembles | **0.766791** | 0.108130 | 0.358288 |
+| `p2n_meta` | vote over 5 ensembles | 0.766683 | 0.108386 | 0.358249 |
+| `p2n_ens_masked` | 26 members | 0.766563 | 0.108364 | 0.358509 |
+| `p2n_ens_distil` | 26 members | 0.764915 | 0.108961 | 0.361209 |
+| `p2n_ens_bp25` | 25 members | 0.764759 | 0.109025 | 0.361457 |
+| `p2n_distil_nl_f` | 1 member | 0.746787 | 0.113117 | 0.393308 |
 
 Each one is reproduced by a single command, which differs only in the recipe name:
 
 ```
+python -m waxal_asr.modeling.predict --recipe p2n_mbr
+python -m waxal_asr.modeling.predict --recipe p2n_ens_masked
 python -m waxal_asr.modeling.predict --recipe p2n_ens_distil
-python -m waxal_asr.modeling.predict --recipe p2n_ens_bp25
-python -m waxal_asr.modeling.predict --recipe p2n_ens_bp10
 python -m waxal_asr.modeling.predict --recipe p2n_distil_nl_f
 ```
 
-**`p2n_ens_masked` at 0.766563 is the best result, and it is what `make submission` runs.** It is
-the 26-member vote with a correct forward pass throughout: the attention mask is passed for every
-member, and the Whisper arm is decoded as a generator rather than through the CTC path.
+**`p2n_mbr` is the scored final submission** (`cand_mbr.csv`, public 0.766791, private 0.772552,
+second place), **and it is what `make submission` runs.** It builds seven complete ensembles, six
+anchored on the seed-43 arm and one on seed 46, plus a meta vote over five of them, and then keeps,
+for every clip, the candidate transcript with the smallest mean normalised character edit distance
+to the 26 members of `p2n_ens_masked`. Every member is decoded with a correct forward pass: the
+attention mask is passed throughout, and the Whisper arm is decoded as a generator rather than
+through the CTC path.
 
-`p2n_ens_distil` is the same 26 members with two differences, both recorded in the recipe: its
-blank-penalty members omit the attention mask, and it predates the Whisper decoding path. It scores
-0.764915 and is kept because reproducing a known result exactly is a useful check on an
-installation. `p2n_ens_bp25` drops the distilled arm; `p2n_ens_bp10` is a 17-member configuration.
-`p2n_distil_nl_f` is a single arm, the strongest single checkpoint, and the cheapest way to verify
-the pipeline without downloading nine sets of weights; `make predict` runs it.
+`p2n_ens_distil` was the second final pick: the same 26 members as `p2n_ens_masked` with two
+differences, both recorded in the recipe. Its blank-penalty members omit the attention mask, and it
+predates the Whisper decoding path. It scores 0.764915 and is kept because reproducing a known
+historical result exactly is a useful check on an installation. `p2n_ens_bp25` drops the distilled
+arm; `p2n_ens_bp10` is a 17-member configuration. `p2n_distil_nl_f` is a single arm, the strongest
+single checkpoint, and the cheapest way to verify the pipeline without downloading twelve sets of
+weights; `make predict` runs it.
 
 One caveat applies to every recipe. The `p1av` checkpoint published here is a retrain rather than
 the original weights, so any ensemble containing it differs slightly from the corresponding
@@ -69,12 +77,29 @@ recipes in configs/ensembles.yaml:
   p2n_ens_distil     26 member(s)  public 0.764915  26 members, the blank-penalty core plus the distilled arm
   p2n_ens_bp25       25 member(s)  public 0.764759  25 members, the blank-penalty core
   p2n_ens_bp10       17 member(s)  public 0.764476  17 members, the configuration that established source diversity
+  p2n_ens_masked     26 member(s)  public 0.766563  26 members, the corrected forward pass
+  p2n_ens_weighted   26 member(s)  public 0.76658  26 members, the two weakest at half weight
+  p2n_ens_soup6      26 member(s)  public 0.766226  26 members, the six-way soup in place of the five-way
+  p2n_ens_s46swap    26 member(s)  public 0.766477  26 members, seed 46 in place of the weakest arm
+  p2n_ens_wide       38 member(s)  public 0.76596  38 members, the penalty bracket widened to 0.5 and 2.5
+  p2n_meta            5 ensembles  public 0.766683  a vote over five complete ensembles
+  p2n_ens_s46anchor  26 member(s)  public 0.766083  26 members, seed 46 as the anchor
+  p2n_mbr             7 candidates  public 0.766791  per-clip selection across seven ensembles, judged by the 26 members
   p2n_distil_nl_f     1 member(s)  public 0.746787  the distilled arm on its own
 ```
 
-A recipe is a list of members. Each member is an `arm` key plus an optional `blank_penalty`, and the
-**first member is the anchor**: its text survives every slot unless the others outvote it, so member
-order is significant. A penalty of 0, or none at all, means ordinary greedy decoding.
+A recipe takes one of three shapes, and defines exactly one of these keys:
+
+- **`members`**: a list of arms that vote. Each member is an `arm` key plus an optional
+  `blank_penalty`, and the **first member is the anchor**: its text survives every slot unless the
+  others outvote it, so member order is significant. A penalty of 0, or none at all, means ordinary
+  greedy decoding. An optional `weight` scales a member's vote.
+- **`ensembles`**: a list of other recipe names. Each named recipe is built in full and the results
+  vote as members, first one anchoring. `p2n_meta` is this shape.
+- **`select`** plus **`judged_by`**: a list of candidate recipe names and one electorate recipe.
+  Every candidate is built in full, and for each clip the candidate transcript with the smallest
+  mean normalised character edit distance to the electorate's members is kept; ties keep the
+  earliest candidate, so order matters here too. `p2n_mbr`, the scored submission, is this shape.
 
 ```yaml
   my_recipe:
@@ -86,12 +111,14 @@ order is significant. A penalty of 0, or none at all, means ordinary greedy deco
 ```
 
 The `defaults` block at the top of the file supplies `vote_threshold: 2.0` and `skeleton: anchor`
-for every recipe. Both differ from the underlying vote function's own defaults, which is why they are
-recorded in the file rather than left implicit. A recipe may override either key inline.
+for every recipe. The skeleton differs from the vote function's own default of `mbr`, and the
+threshold has no default in the vote function at all, which is why both are recorded in the file
+rather than left implicit. A recipe may override either key inline.
 
-`tests/test_submission_pipeline.py` asserts that the recipe file parses, that the three submitted
-recipes are still present, that `p2n_ens_distil` still has 26 members anchored on `s43`, and that
-every arm named in a recipe matches the registry in `waxal_asr/config.py`.
+`tests/test_submission_pipeline.py` asserts that the recipe file parses, that the submitted recipes
+are still present, that `p2n_mbr` still names its seven candidates in order and is judged by
+`p2n_ens_masked`, that `p2n_ens_distil` still has 26 members anchored on `s43`, and that every arm
+named in a recipe matches the registry in `waxal_asr/config.py`.
 
 ## 2. Setup
 
@@ -99,7 +126,9 @@ every arm named in a recipe matches the registry in `waxal_asr/config.py`.
 
 The submitted result was produced with Python 3.12.13, torch 2.11.0+cu128, transformers 4.57.6,
 datasets 3.6.0, soundfile 0.14.0, librosa 0.11.0 and numpy 2.4.6. These pins are in
-[`requirements.txt`](../requirements.txt).
+[`requirements.txt`](../requirements.txt), recorded from the training environment's `pip freeze`.
+Python 3.11 or 3.12 is required: numpy 2.4.6 needs at least 3.11, and the pinned audiomentations
+does not install on 3.13.
 
 Install torch first, from the CUDA 12.8 index. The GPU used is Blackwell (sm_120) and the default
 PyPI wheel does not carry that architecture:
@@ -175,23 +204,25 @@ PY
 
 ### Weights
 
-Nine checkpoints are published under the `anyantudre` namespace, plus one third-party model used
+Eleven checkpoints are published under the `anyantudre` namespace, plus one third-party model used
 zero-shot. The registry is `ENSEMBLE_ARMS` in `waxal_asr/config.py`, and the same mapping is repeated
 in the `arms:` block of `configs/ensembles.yaml` for readers who do not want to read Python; a test
 keeps the two from drifting apart.
 
 | arm key | repository | role |
 |---|---|---|
-| `s43` | `anyantudre/waxal-w2vbert-linsna-seed43` | anchors every ensemble here |
+| `s43` | `anyantudre/waxal-w2vbert-linsna-seed43` | anchors six of the seven ensembles |
 | `s44` | `anyantudre/waxal-w2vbert-linsna-seed44` | widest corpus |
 | `soup5` | `anyantudre/waxal-w2vbert-linsna-soup5` | five-way weight average |
+| `soup6` | `anyantudre/waxal-w2vbert-linsna-soup6` | six-way weight average |
 | `p1raw` | `anyantudre/waxal-w2vbert-linsnalug-raw` | root of the family |
 | `linspec_r` | `anyantudre/waxal-w2vbert-lin-specialist` | Lingala specialist |
 | `snaspec_r` | `anyantudre/waxal-w2vbert-sna-specialist` | Shona specialist |
 | `p1av` | `anyantudre/waxal-w2vbert-linsna-afrivoicemix` | mixed-curriculum counter-experiment |
 | `distil` | `anyantudre/waxal-w2vbert-linsna-distilled` | strongest single checkpoint |
-| `turbo_linsna_r` | `anyantudre/waxal-whisper-turbo-linsna` | Whisper large-v3-turbo |
-| `sunbird51` | `Sunbird/asr-whisper-51-african-languages` | third party, zero-shot, pinned |
+| `s46` | `anyantudre/waxal-w2vbert-linsna-seed46` | most decorrelated arm, anchors the seventh |
+| `turbo_linsna_r` | `anyantudre/waxal-whisper-turbo-linsna` | Whisper large-v3-turbo, greedy, no windowing |
+| `sunbird51` | `Sunbird/asr-whisper-51-african-languages` | third party, zero-shot, pinned, beam 8, windowed |
 
 A CTC arm is roughly 2.3 GB and the Whisper arm roughly 3.2 GB. To fetch one ahead of time:
 
@@ -200,7 +231,7 @@ huggingface-cli download anyantudre/waxal-w2vbert-linsna-seed43 --local-dir mode
 export WAXAL_MODELS_DIR=models
 ```
 
-The eight w2v-BERT arms share a 97-token raw character vocabulary that includes the 26 capitals and
+The ten w2v-BERT arms share a 97-token raw character vocabulary that includes the 26 capitals and
 `! , . : ; ?`.
 
 ## 3. What the command does
@@ -212,14 +243,29 @@ order.
 |---|---|---|
 | 1 | `waxal_asr/modeling/ctc.py` | one forward pass per CTC arm, batched, over every clip |
 | 2 | `waxal_asr/decode.py` | greedy arg max, optionally after subtracting the blank penalty |
-| 3 | `waxal_asr/modeling/sunbird.py` | the third-party zero-shot arm, windowed, beam 8 |
-| 4 | `waxal_asr/postprocess.py` | loop collapse then sentence case, on every member |
-| 5 | `waxal_asr/ensemble.py` | character-level ROVER over the members |
-| 6 | `waxal_asr/postprocess.py` | the same two rules again, on the voted text |
-| 7 | `waxal_asr/modeling/predict.py` | validate, then write `data/processed/submission.csv` |
+| 3 | `waxal_asr/modeling/whisper.py` | the fine-tuned Whisper arm: generates greedily, truncates past 30 s |
+| 4 | `waxal_asr/modeling/sunbird.py` | the third-party zero-shot arm, windowed, beam 8, language routed |
+| 5 | `waxal_asr/postprocess.py` | loop collapse then sentence case, on every member |
+| 6 | `waxal_asr/ensemble.py` | character-level ROVER over the members of each ensemble |
+| 7 | `waxal_asr/postprocess.py` | the same two rules again, on the voted text |
+| 8 | `waxal_asr/modeling/predict.py` | for `p2n_mbr`: per-clip selection across the finished ensembles |
+| 9 | `waxal_asr/modeling/predict.py` | validate, then write `data/processed/submission.csv` |
 
-Stages 4 and 6 run the identical function; both rules are idempotent, so the second application is a
-safety net rather than a second edit.
+Stages 5 and 7 run the identical function; both rules are idempotent, so the second application is a
+safety net rather than a second edit. For the scored recipe, stages 6 and 7 repeat for each of the
+seven candidate ensembles (and once more for the meta vote inside `p2n_meta`), all drawing on the
+same per-arm cache, before stage 8 selects per clip.
+
+### Error handling and logging
+
+Console output is prefixed by stage: `[predict]` for recipe assembly, `[ctc]`, `[whisper]` and
+`[sunbird]` for per-arm progress counters (`[ctc] 8/892`), and `[lid]` for language identification.
+`[predict] <arm>_bp<penalty>: reusing cache` means no forward pass ran for that member; see the
+cache section below. Every failure path exits non-zero with a named cause rather than writing a
+partial file: a missing recipe, a missing language map, a malformed test CSV, and each of the three
+validation gates in Section 7 all abort the run. Training logs its per-step metrics to
+`runs/<name>` (TensorBoard) and writes `final_metrics.json` next to the weights under the model
+output directory; nothing in the inference path needs either.
 
 ### Command line
 
@@ -256,14 +302,18 @@ data/interim/s43_bp15.json    penalty 1.5
 data/interim/s43_bp2.json     penalty 2.0
 ```
 
-This is the resumability mechanism and it matters operationally in three ways. An interrupted run
-resumes instead of restarting. A second recipe that shares an arm reuses it, which is why running all
-four recipes costs barely more than running `p2n_ens_distil` alone. And **a stale cache is silently
-authoritative**: if weights or audio change, delete the affected JSON files or the old transcripts
-will be voted on. `[predict] s43_bp15: reusing cache` on the console is the signal that no forward
-pass happened.
+Members decoded without the attention mask (the legacy blank-penalty members of `p2n_ens_distil`)
+cache with a `_nomask` suffix, for example `s43_bp15_nomask.json`: a different forward pass is a
+different member, so it must be a different cache file.
 
-Interim files total roughly 20 MB for the 26-member recipe. The final CSV is about 300 KB.
+This is the resumability mechanism and it matters operationally in three ways. An interrupted run
+resumes instead of restarting. A second recipe that shares an arm reuses it, which is why running
+every recorded recipe costs barely more than running the largest one alone. And **a stale cache is
+silently authoritative**: if weights or audio change, delete the affected JSON files, including any
+`_nomask` variants, or the old transcripts will be voted on. `[predict] s43_bp15: reusing cache` on
+the console is the signal that no forward pass happened.
+
+Interim files total roughly 30 MB for the scored recipe. The final CSV is about 300 KB.
 
 ### Blank-penalty members
 
@@ -345,9 +395,10 @@ Lingala (49.0 per cent, confidence 0.990) and 423 Shona (47.4 per cent, confiden
 low-confidence clips and 1 Luganda; `facebook/mms-lid-256` returns 440 and 440 (49.3 per cent each,
 confidence 0.996) with 12 low confidence. Both agree the set is half Lingala and half Shona.
 
-That measurement is both an input to the design and a step in the recipes. **The three ensemble
-recipes need a language map**, because each contains the routed `sunbird51` arm;
-`p2n_distil_nl_f` does not. Produce it with:
+That measurement is both an input to the design and a step in the recipes. **Every recipe containing
+the routed `sunbird51` arm needs a language map**, which is every recorded recipe except
+`p2n_distil_nl_f`: the scored `p2n_mbr` needs it for all seven of its candidate ensembles and for
+its electorate. Produce it with:
 
 ```bash
 make lid
@@ -435,63 +486,92 @@ benchmark with no matches in any pass, and the one arm trained on test audio (`d
 ensemble's transcripts as targets. Both are documented under
 [Disclosures](SOLUTION.md#disclosures).
 
-## 8. Known gaps
+## 8. Running on new audio
+
+The test-set path above generalises to any audio directory: point the two path flags at your data.
+`--test-csv` needs a CSV with an `ID` column (the rebuild snippet in Section 2 generates one from a
+directory), and `--audio-dir` a directory with one file per identifier.
+
+```
+python -m waxal_asr.modeling.predict --recipe p2n_ens_masked \
+    --audio-dir /path/to/audio --test-csv /path/to/ids.csv --out my_transcripts.csv
+```
+
+Two caveats. Any recipe containing `sunbird51` needs a matching language map first: run
+`python -m waxal_asr.lid --audio-dir /path/to/audio --out data/interim/lid.json`. And the per-arm
+cache keys on arm and penalty only, not on the audio, so **delete `data/interim/*.json` when
+switching audio directories** or the old transcripts will be reused. For a single model on new
+audio, `p2n_distil_nl_f` is the lightest recipe; for Luganda, the only published checkpoint that has
+seen it is `waxal-w2vbert-linsnalug-raw` (arm `p1raw`).
+
+## 9. Known gaps
 
 Recorded so a reader does not lose time discovering them.
 
-- **`predict.py` exposes no batch-size flag.** The CTC batch size is the `batch_size = 8` default of
-  `waxal_asr.modeling.ctc.transcribe_ctc`. Lowering it for a smaller card means editing that default
-  rather than passing an argument.
+- **The legacy unmasked members are batch-composition-dependent.** Without the attention mask,
+  zero-padding leaks into self-attention, so those members' transcripts depend on how clips are
+  grouped into batches. Rebuilding `p2n_ens_distil` byte-for-byte therefore requires the default
+  `--batch-size 8` and the clip order of `Test.csv`. The masked members, which is everything the
+  scored `p2n_mbr` uses, do not have this property: any batch size gives the same transcripts.
 
-## 9. Runtime
+## 10. Runtime
 
 Approximate wall clock on one RTX 5090 (32 GB), 32 CPU cores, 92 GB RAM, over the 892-clip test set.
 
 | step | scope | approximate wall clock |
 |---|---|---|
+| `make lid` | 892 clips, two passes of a 1B LID model | 25 minutes |
 | CTC forward pass | per arm | 20 minutes |
 | Blank-penalty re-decode | per checkpoint, logits already computed | 90 seconds |
+| Fine-tuned Whisper arm | 892 clips, greedy | comparable to one CTC arm |
 | Sunbird-51 arm | 892 clips, beam 8, windowed | comparable to one CTC arm |
-| Vote and post-processing | any recipe | seconds |
-| **`p2n_ens_distil` from cached arm outputs** | 26 members | **under 5 minutes** |
-| **`p2n_ens_distil` from scratch** | 10 checkpoints | **about 6 hours** |
+| Votes, selection and post-processing | any recipe | seconds |
+| **`p2n_mbr` from cached arm outputs** | 7 ensembles plus the electorate | **under 5 minutes** |
+| **`p2n_mbr` from scratch** | 12 distinct checkpoints | **about 7 hours, plus `make lid`** |
+| `p2n_ens_distil` from scratch | 10 distinct checkpoints | about 6 hours |
 
-The dominant cost is the forward pass multiplied by the number of distinct checkpoints, which is ten
-for the 26-member recipe and one for `p2n_distil_nl_f`. Everything after the GPU work is CPU-bound
-and negligible. The penalty sweep is cheap only because the logits are decoded repeatedly rather than
-recomputed; a naive implementation would pay a full forward pass per penalty.
+The dominant cost is the forward pass multiplied by the number of distinct checkpoints: twelve for
+the scored recipe (the ten of `p2n_ens_distil` plus `s46` and `soup6`), one for `p2n_distil_nl_f`.
+Everything after the GPU work is CPU-bound and negligible. The penalty sweep is cheap only because
+the logits are decoded repeatedly rather than recomputed; a naive implementation would pay a full
+forward pass per penalty. On an 8 GB card at `--batch-size 4`, budget roughly double the GPU time.
 
 For reference, training is not on this path at all, but the arms took 8 to 10 hours each for a CTC
-arm and 12 hours for the Whisper arm, roughly 80 GPU hours in total.
+arm and 12 hours for the Whisper arm, roughly 80 GPU hours in total. Building the training corpus
+(`make data`, about 14 GB in roughly 54,000 files) is a download of an hour or so on a fast
+connection, and is likewise not needed for inference.
 
-## 10. Failure modes
+## 11. Failure modes
 
 | symptom | cause and fix |
 |---|---|
-| `403` from the Hugging Face Hub | the model repositories are gated until the competition closes. Request access, or download the weights manually and set `WAXAL_MODELS_DIR`. |
-| `unknown recipe '<name>'` | the name is not in `configs/ensembles.yaml`. Run `--list` for the four in Section 1; earlier drafts of this repository used different recipe names. |
+| `403` from the Hugging Face Hub | check the repository name and your network; the model repositories are public. If the Hub is unreachable, download the weights manually and set `WAXAL_MODELS_DIR`. |
+| `unknown recipe '<name>'` | the name is not in `configs/ensembles.yaml`. Run `--list` for the twelve recorded recipes; earlier drafts of this repository used different recipe names. |
 | `no audio file for id 'ID_XXXX' in ...` | the loader expects `data/raw/test_audio/<ID>.<ext>`. Check that the ids in `Test.csv` match the filenames, including case. |
 | `expected a CSV with an ID column` | `--test-csv` points at a file whose header has no `ID` column. |
 | `N empty transcript(s), which Zindi rejects` | a single-arm recipe returned nothing for a very short clip. Use an ensemble recipe, where the anchor fills the cell, or inspect that clip. |
-| CUDA out of memory | lower `batch_size` in `waxal_asr/modeling/ctc.py`; see [Known gaps](#8-known-gaps). Inference fits in 8 GB at batch 4. |
-| output looks stale after changing weights | a per-arm cache was reused. Delete the relevant `data/interim/<arm>_bp<penalty>.json` and re-run. |
+| CUDA out of memory | pass `--batch-size 4`, which fits in 8 GB (measured on an 8 GB RTX 4070; the default 8 does not fit there). The masked members' transcripts do not depend on the batch size; see [Known gaps](#9-known-gaps) for the one legacy exception. |
+| output looks stale after changing weights | a per-arm cache was reused. Delete the relevant `data/interim/<arm>_bp<penalty>.json`, including `_nomask` variants, and re-run. |
 | `AttributeError: 'list' object has no attribute 'keys'` | the Sunbird checkpoint loaded outside `waxal_asr/modeling/sunbird.py`. See Section 4. |
-| the score differs from 0.764915 by 0.000141 | expected. The published `p1av` is a retrain; `p2n_ens_distil` from published weights returns 0.764774. |
+| `p2n_ens_distil` differs from 0.764915 by 0.000141 | expected. The published `p1av` is a retrain; that recipe from published weights returns 0.764774. The same arm shifts the other recipes comparably. |
 
-## 11. Summary
+## 12. Summary
 
 ```
 # one arm, verifies the setup end to end, about 2 GB of weights
 python -m waxal_asr.modeling.predict --recipe p2n_distil_nl_f
 
-# the best recorded submission, 26 members, public 0.764915
+# the language map, required by every other recipe
+python -m waxal_asr.lid --audio-dir data/raw/test_audio --out data/interim/lid.json
+
+# the scored final submission, public 0.766791, private 0.772552
+python -m waxal_asr.modeling.predict --recipe p2n_mbr
+
+# the historical 26-member reference, public 0.764915
 python -m waxal_asr.modeling.predict --recipe p2n_ens_distil
 
-# the other two recorded ensembles
-python -m waxal_asr.modeling.predict --recipe p2n_ens_bp25
-python -m waxal_asr.modeling.predict --recipe p2n_ens_bp10
-
-# all four write data/processed/submission.csv, validated before writing
+# all recipes write data/processed/submission.csv, validated before writing
 ```
 
-`make predict` is the first of these and `make submission` the second.
+`make predict` runs the first of these, `make lid` the second, and `make submission` the third,
+which is the scored recipe `p2n_mbr`.
