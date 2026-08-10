@@ -160,12 +160,11 @@ used at any point.
 | Training one CTC arm (8 epochs, roughly 31,000 clips) | 8 to 10 hours |
 | Training the Whisper-turbo arm | 12 hours |
 | Language identification over 892 clips | 25 minutes |
-| Inference, one arm over 892 clips | 20 minutes |
-| Blank-penalty re-decode, per checkpoint | 90 seconds (logits are cached, then decoded per penalty) |
+| One member decode: a full forward pass of one arm at one blank penalty | 10 to 15 minutes |
 | Ensembling, selection and post-processing | seconds |
 | Training-corpus download, `make data` | about an hour (14 GB), training only |
 | **Full submission (`p2n_mbr`) from cached arm outputs** | **under 5 minutes** |
-| **Full submission (`p2n_mbr`) from scratch, 12 checkpoints** | **about 7 hours, plus `make lid`** |
+| **Full submission (`p2n_mbr`) from scratch, 43 member decodes** | **about 9 hours, plus `make lid`** |
 
 Total training was roughly 80 GPU hours. The competition score can be reproduced without any of it,
 using the published weights.
@@ -298,9 +297,10 @@ A general guide to running inference on new audio, including single clips and ot
 - *403 from the Hugging Face Hub.* Check the repository name and your network; the model
   repositories are public. If the Hub is unreachable, download the weights manually and set
   `WAXAL_MODELS_DIR`.
-- *CUDA out of memory.* Lower the batch size: `--batch-size 4`. Inference fits in 8 GB at batch 4,
-  measured on an RTX 4070; the default of 8 does not fit there. The batch size does not change the
-  transcripts of any recipe except the legacy unmasked members of `p2n_ens_distil`.
+- *CUDA out of memory.* Lower the batch size: `--batch-size 2` on an 8 GB card. Clips are batched
+  in test-list order, so a batch holding several 35 second clips at float32 exceeds 8 GB even at
+  batch 4 (measured on an RTX 4070; the default of 8 is for a 32 GB card). The batch size does not
+  change the transcripts of any recipe except the legacy unmasked members of `p2n_ens_distil`.
 - *No audio file found for ID.* The loader expects `data/raw/test_audio/<ID>.<ext>`. Check that the
   identifiers in `Test.csv` match the filenames.
 - *An empty cell in the submission.* One test clip is 1.01 seconds long and some models return

@@ -44,10 +44,12 @@ RECIPES_FILE = CONFIGS_DIR / "ensembles.yaml"
 # Clips per forward pass for the CTC and fine-tuned Whisper arms, set once from --batch-size.
 # It is a property of the machine, not of any recipe, which is why it is module state rather
 # than a parameter threaded through the recursive recipe builder. 8 is the setting of record
-# (a 32 GB card); 4 fits in 8 GB. For the masked members the batch size does not change the
-# transcripts, only the speed. The legacy unmasked members of p2n_ens_distil are the one
-# exception: without the attention mask, padding leaks into self-attention, so their output
-# depends on how clips are grouped, and rebuilding them byte-for-byte requires the default 8.
+# (a 32 GB card); on an 8 GB card use 2, because clips are batched in test-list order and a
+# batch of 35 second clips at float32 exceeds 8 GB even at 4. For the masked members the batch
+# size does not change the transcripts, only the speed. The legacy unmasked members of
+# p2n_ens_distil are the one exception: without the attention mask, padding leaks into
+# self-attention, so their output depends on how clips are grouped, and rebuilding them
+# byte-for-byte requires the default 8.
 BATCH_SIZE = 8
 
 
@@ -288,7 +290,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=PROCESSED_DATA_DIR / "submission.csv")
     parser.add_argument("--recipes-file", type=Path, default=RECIPES_FILE)
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
-                        help="clips per forward pass; the default 8 needs a large card, 4 fits in 8 GB")
+                        help="clips per forward pass; the default 8 needs a large card, use 2 on 8 GB")
     args = parser.parse_args()
     BATCH_SIZE = args.batch_size
 

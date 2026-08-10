@@ -323,13 +323,15 @@ no model is updated and no test transcription is used. The measurement behind it
 these members are worth having even though the re-decoded arms score worse on their own, are in
 [SOLUTION.md](SOLUTION.md#blank-penalty-decoding).
 
-Operationally there are two things to know. The forward pass is shared, so decoding an arm at four
-penalties costs one pass plus four cheap arg maxes, which is what makes 26 members affordable. And
-the penalty is chosen by matching the output word rate to the reference rate of 1.41 words per
+Operationally there are two things to know. In this released pipeline each `(arm, penalty)` pair is
+decoded by its own forward pass and cached as its own member file, so the cache, not logit reuse,
+is what makes re-running recipes cheap; the competition-era decode script kept the logits in memory
+and swept penalties over them, which is faster on the first run and produces identical transcripts.
+And the penalty is chosen by matching the output word rate to the reference rate of 1.41 words per
 second, not by tuning against the leaderboard; `waxal_asr.decode.words_per_second` computes the
 figure to compare, and `REFERENCE_WORDS_PER_SECOND` in the same module is the target. A penalty of
 1.5 brought a representative arm to 1.417 words per second. The penalties used in the recorded
-recipes are 1.0, 1.5 and 2.0.
+recipes are 1.0, 1.5 and 2.0, widened to 0.5 and 2.5 in `p2n_ens_wide`.
 
 ## 4. The Sunbird-51 arm
 
@@ -521,20 +523,19 @@ Approximate wall clock on one RTX 5090 (32 GB), 32 CPU cores, 92 GB RAM, over th
 | step | scope | approximate wall clock |
 |---|---|---|
 | `make lid` | 892 clips, two passes of a 1B LID model | 25 minutes |
-| CTC forward pass | per arm | 20 minutes |
-| Blank-penalty re-decode | per checkpoint, logits already computed | 90 seconds |
-| Fine-tuned Whisper arm | 892 clips, greedy | comparable to one CTC arm |
-| Sunbird-51 arm | 892 clips, beam 8, windowed | comparable to one CTC arm |
+| One `(arm, penalty)` member | a full CTC forward pass over 892 clips | 10 to 15 minutes |
+| Fine-tuned Whisper arm | 892 clips, greedy | comparable to one CTC pass |
+| Sunbird-51 arm | 892 clips, beam 8, windowed, per clip | 2 to 3 hours, the slowest member |
 | Votes, selection and post-processing | any recipe | seconds |
 | **`p2n_mbr` from cached arm outputs** | 7 ensembles plus the electorate | **under 5 minutes** |
-| **`p2n_mbr` from scratch** | 12 distinct checkpoints | **about 7 hours, plus `make lid`** |
-| `p2n_ens_distil` from scratch | 10 distinct checkpoints | about 6 hours |
+| **`p2n_mbr` from scratch** | 43 member decodes over 12 checkpoints | **about 9 hours, plus `make lid`** |
+| `p2n_ens_distil` from scratch | 26 member decodes over 10 checkpoints | about 6 hours |
 
-The dominant cost is the forward pass multiplied by the number of distinct checkpoints: twelve for
-the scored recipe (the ten of `p2n_ens_distil` plus `s46` and `soup6`), one for `p2n_distil_nl_f`.
-Everything after the GPU work is CPU-bound and negligible. The penalty sweep is cheap only because
-the logits are decoded repeatedly rather than recomputed; a naive implementation would pay a full
-forward pass per penalty. On an 8 GB card at `--batch-size 4`, budget roughly double the GPU time.
+The dominant cost is the number of member decodes, each one a full forward pass in this released
+pipeline: 43 for the scored recipe across its twelve distinct checkpoints, one for
+`p2n_distil_nl_f`. Everything after the GPU work is CPU-bound and negligible. On an 8 GB card at
+`--batch-size 2` the full `p2n_mbr` rebuild measures roughly 13 hours end to end (RTX 4070,
+each CTC pass about 13.5 minutes).
 
 For reference, training is not on this path at all, but the arms took 8 to 10 hours each for a CTC
 arm and 12 hours for the Whisper arm, roughly 80 GPU hours in total. Building the training corpus
@@ -550,7 +551,7 @@ connection, and is likewise not needed for inference.
 | `no audio file for id 'ID_XXXX' in ...` | the loader expects `data/raw/test_audio/<ID>.<ext>`. Check that the ids in `Test.csv` match the filenames, including case. |
 | `expected a CSV with an ID column` | `--test-csv` points at a file whose header has no `ID` column. |
 | `N empty transcript(s), which Zindi rejects` | a single-arm recipe returned nothing for a very short clip. Use an ensemble recipe, where the anchor fills the cell, or inspect that clip. |
-| CUDA out of memory | pass `--batch-size 4`, which fits in 8 GB (measured on an 8 GB RTX 4070; the default 8 does not fit there). The masked members' transcripts do not depend on the batch size; see [Known gaps](#9-known-gaps) for the one legacy exception. |
+| CUDA out of memory | pass `--batch-size 2` on an 8 GB card (measured on an 8 GB RTX 4070: the default 8 is for a 32 GB card, and even 4 overflows on a batch of 35 second clips, since clips are batched in test-list order). The masked members' transcripts do not depend on the batch size; see [Known gaps](#9-known-gaps) for the one legacy exception. |
 | output looks stale after changing weights | a per-arm cache was reused. Delete the relevant `data/interim/<arm>_bp<penalty>.json`, including `_nomask` variants, and re-run. |
 | `AttributeError: 'list' object has no attribute 'keys'` | the Sunbird checkpoint loaded outside `waxal_asr/modeling/sunbird.py`. See Section 4. |
 | `p2n_ens_distil` differs from 0.764915 by 0.000141 | expected. The published `p1av` is a retrain; that recipe from published weights returns 0.764774. The same arm shifts the other recipes comparably. |
