@@ -6,7 +6,6 @@ overrule it, an empty arm abstains rather than voting for silence, and the outpu
 
 from waxal_asr.ensemble import _combine
 
-
 WEIGHTS = [1.0] * 4
 
 

@@ -4,7 +4,8 @@ Recipes are defined in ``configs/ensembles.yaml`` rather than in this file, so a
 arms and decoding settings needs no code change:
 
     python -m waxal_asr.modeling.predict --recipe p2n_distil_nl_f  # one arm, fast, verifies setup
-    python -m waxal_asr.modeling.predict --recipe p2n_ens_distil   # the best submission, 0.764915
+    python -m waxal_asr.modeling.predict --recipe p2n_mbr          # the scored submission, 0.766791
+    python -m waxal_asr.modeling.predict --recipe p2n_ens_distil   # the fixed reference ensemble
     python -m waxal_asr.modeling.predict --list                    # show available recipes
 
 Recipes are named after the submission file each one produced, so a recipe maps to exactly one
@@ -28,7 +29,13 @@ from pathlib import Path
 
 import yaml
 
-from waxal_asr.config import CONFIGS_DIR, INTERIM_DATA_DIR, PROCESSED_DATA_DIR, RAW_DATA_DIR, resolve_model
+from waxal_asr.config import (
+    CONFIGS_DIR,
+    INTERIM_DATA_DIR,
+    PROCESSED_DATA_DIR,
+    RAW_DATA_DIR,
+    resolve_model,
+)
 from waxal_asr.ensemble import _combine
 from waxal_asr.postprocess import postprocess
 

@@ -28,7 +28,7 @@ CONFIGS_DIR = PROJ_ROOT / "configs"
 RESULTS_DIR = PROJ_ROOT / "results"
 RUNS_DIR = PROJ_ROOT / "runs"
 
-# The nine published checkpoints, and where their weights live on the Hugging Face Hub. Setting
+# The eleven published checkpoints, and where their weights live on the Hugging Face Hub. Setting
 # WAXAL_MODELS_DIR makes the code load from disk instead, which is what the batch jobs do.
 #
 # Repository names follow waxal-<architecture>-<languages>-<variant>, so the languages a checkpoint

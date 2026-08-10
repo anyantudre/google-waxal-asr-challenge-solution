@@ -5,14 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "waxal_asr"
 version = "1.0.0"
-description = "Automatic speech recognition for Lingala and Shona: winning solution for the Google WAXAL ASR Challenge"
+description = "Automatic speech recognition for Lingala and Shona: second-place solution for the Google WAXAL ASR Challenge"
 authors = [{ name = "Alban Nyantudre" }]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "torch>=2.7",
     "transformers>=4.50",
+    "accelerate>=1.0",
     "datasets>=3.0",
     "jiwer>=3.0",
     "rapidfuzz>=3.0",
@@ -21,8 +22,9 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.0",
     "pyyaml>=6.0",
-    "huggingface-hub>=0.25",
-    "audiomentations>=0.37",
+    "huggingface-hub>=0.34",
+    "audiomentations>=0.42",
+    "omegaconf>=2.3",
 ]
 
 [project.optional-dependencies]
@@ -38,10 +40,13 @@ include = ["waxal_asr*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+# E501 is exempt deliberately: this codebase explains itself in long inline comments, and
+# reflowing them to a character budget would cost more clarity than it buys.
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -15,7 +15,6 @@ import yaml
 
 from waxal_asr.modeling.predict import load_recipes, read_test_ids, validate, write_submission
 
-
 CLIP_IDS = ["ID_AAA", "ID_BBB", "ID_CCC"]
 
 
@@ -100,10 +99,24 @@ class TestRecipes:
         # Recipes are named after the submission file each produced, so these names double as the
         # link between this repository and a specific leaderboard row.
         recipes, _ = load_recipes()
-        for name in ("p2n_ens_distil", "p2n_ens_bp25", "p2n_distil_nl_f"):
+        for name in ("p2n_mbr", "p2n_ens_masked", "p2n_meta",
+                     "p2n_ens_distil", "p2n_ens_bp25", "p2n_distil_nl_f"):
             assert name in recipes, f"{name} must stay in the recipe file"
 
-    def test_the_best_recipe_matches_what_was_submitted(self):
+    def test_the_scored_recipe_matches_what_was_submitted(self):
+        # p2n_mbr produced cand_mbr.csv, the scored final pick (public 0.766791, private 0.772552).
+        recipes, _ = load_recipes()
+        scored = recipes["p2n_mbr"]
+        assert scored["public_score"] == 0.766791
+        assert scored["judged_by"] == "p2n_ens_masked", "the electorate is the corrected 26-member vote"
+        assert scored["select"] == [
+            "p2n_meta", "p2n_ens_weighted", "p2n_ens_masked", "p2n_ens_s46swap",
+            "p2n_ens_soup6", "p2n_ens_wide", "p2n_ens_s46anchor",
+        ], "the seven candidates, in tie-break order"
+
+    def test_the_reference_recipe_matches_what_was_submitted(self):
+        # p2n_ens_distil is the fixed reference for checking an installation: it rebuilds the
+        # historical 26-member vote exactly.
         recipes, _ = load_recipes()
         best = recipes["p2n_ens_distil"]
         assert len(best["members"]) == 26, "the 0.764915 submission had 26 members"

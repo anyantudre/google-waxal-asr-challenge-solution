@@ -76,7 +76,7 @@ def transcribe_sunbird(
         chunks = (
             [waveform]
             if len(waveform) <= window
-            else [waveform[s : s + window] for s in range(0, len(waveform), stride) if s < len(waveform)]
+            else [waveform[s : s + window] for s in range(0, len(waveform), stride)]
         )
         kwargs = {"max_new_tokens": 200, "num_beams": BEAMS}
         if lang_map:

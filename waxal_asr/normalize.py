@@ -1,15 +1,15 @@
 """Text normalization policy.
 
-CRITICAL RULE: this policy is calibrated ONLY on the train/validation splits.
-The Phase-1 test transcriptions are publicly leaked but OFF-LIMITS for any tuning
-(including normalization). See CHALLENGE_DESCRIPTION.md \u00a75.
+CRITICAL RULE: this policy is calibrated ONLY on the train/validation splits. It was
+fixed before the Phase-1 test transcriptions became permitted training data in Phase 2,
+and no test text of any phase contributed to it.
 
 The same policy must be applied to (a) training targets, (b) local-eval references,
 and (c) model predictions before scoring/submission, so it lives in one place.
 Every option is config-driven (cfg.normalize) so we can ablate it as an experiment.
 
-HARD RULES (verified against orthography sources + Train.csv, 2026-07-02, see
-research/Q4_text_norm.md). These prevent real WER/CER inflation:
+HARD RULES (verified against orthography sources + Train.csv, 2026-07-02).
+These prevent real WER/CER inflation:
   * NEVER strip the apostrophe (U+0027), it is LEXICAL in all three languages:
     Luganda ng'=\u014b and n' connective (~2.7/row), Shona n'anga, Lingala elisions n'a/d'/l'.
   * NEVER strip the hyphen (-), lexical reduplication (mwana-mwasi, yana-siya).
@@ -21,6 +21,7 @@ Best tunable win (train/val-only): unify Luganda's velar-nasal spelling, see
 `unify_luganda_velar_nasal` below (data mixes \u014b, ng', and modifier \u1d51 inconsistently).
 """
 from __future__ import annotations
+
 import re
 import unicodedata
 

@@ -27,6 +27,7 @@ import pandas as pd
 import soundfile as sf
 
 from waxal_asr.config import INTERIM_DATA_DIR, PROJ_ROOT, RAW_DATA_DIR, REPORTS_DIR
+from waxal_asr.decode import REFERENCE_WORDS_PER_SECOND
 
 # Whisper's encoder consumes a fixed 30 second window, so a longer clip loses its tail unless it is
 # chunked. CTC arms have no such limit, which is why this fraction is reported rather than assumed.
@@ -35,8 +36,8 @@ WHISPER_WINDOW_S = 30.0
 # Rates measured over the Lingala and Shona references. They are the yardstick a submission is read
 # against: a word rate below the reference means the decoder is dropping words, and a punctuation
 # rate away from the reference costs twice, since character error is scored on the raw string and
-# word error does not strip punctuation.
-REFERENCE_WORDS_PER_SECOND = 1.41
+# word error does not strip punctuation. The word rate (REFERENCE_WORDS_PER_SECOND, imported above)
+# lives in waxal_asr.decode, which calibrates the blank penalty against the same yardstick.
 REFERENCE_COMMAS_PER_ROW = 0.630
 REFERENCE_PERIODS_PER_ROW = 1.402
 

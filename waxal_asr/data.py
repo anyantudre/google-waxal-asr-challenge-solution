@@ -4,20 +4,23 @@ Audio lives on HuggingFace `google/WaxalNLP` (configs lin_asr / sna_asr / lug_as
 Zindi ships only text+IDs (Train.csv/Test.csv) that map 1:1 to HF rows by `id`.
 We load audio from HF and align it with the Zindi split.
 
-Local evaluation (our legitimate Phase-2 proxy: NOT the leaked test labels):
+Local evaluation:
   * `validation`, the split WAXAL already marks in Train.csv (`original_split`).
   * `speaker_disjoint` holdout, carved from train on unseen speakers, which mimics
     Phase 2 ("new speakers, no metadata") far better than the Phase-1 test set.
 
-Schema CONFIRMED (datasets-server API + card + README, 2026-07-02; see research/Q6_waxal.md):
+Schema CONFIRMED (datasets-server API + card + README, 2026-07-02):
 each ASR config (lin_asr/sna_asr/lug_asr) has 6 columns
   [id, speaker_id, transcription, language, gender, audio]
 and 4 splits [train, validation, test, unlabeled]. `speaker_id` is present -> speaker-disjoint
 splits work. `audio` is MP3-encoded -> decode + resample to 16 kHz. The `unlabeled` split has
-transcription="" (use for SSL / pseudo-labelling, never for supervised targets). NEVER load the
-`test` split, it is/overlaps the Phase-1 hidden test set.
+transcription="" (use for SSL / pseudo-labelling, never for supervised targets). This module
+never loads the `test` split: it is the Phase-1 test set, which Phase 1 forbade training on.
+Phase 2 permits it and it IS used, as disclosed in README.md and docs/SOLUTION.md, but through
+the separate corpus-construction path, not through these splits.
 """
 from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -41,7 +44,7 @@ def load_zindi_csv(name: str = "Train.csv") -> pd.DataFrame:
 def load_hf_audio(language_config: str, split: str = "train", streaming: bool = False):
     """Load one HF audio config (e.g. 'lug_asr'). Import kept local so the package
     imports without `datasets` installed (e.g. for pure-metrics use)."""
-    from datasets import load_dataset, Audio
+    from datasets import Audio, load_dataset
     ds = load_dataset("google/WaxalNLP", language_config, split=split, streaming=streaming)
     ds = ds.cast_column(AUDIO_COLUMN, Audio(sampling_rate=16000))
     return ds
@@ -80,7 +83,8 @@ def _load_external(spec: dict, sr: int, cap=None):
     construction (different sources). `cap` (from cfg.data.limit) forces a small sample for smoke runs.
     """
     import itertools
-    from datasets import load_dataset, Audio, Dataset
+
+    from datasets import Audio, Dataset, load_dataset
 
     audio_col, text_col = spec.get("audio_col", AUDIO_COLUMN), spec.get("text_col", TEXT_COLUMN)
     caps = [int(x) for x in (spec.get("max_rows"), cap) if x]
@@ -88,7 +92,6 @@ def _load_external(spec: dict, sr: int, cap=None):
 
     local = spec.get("local")
     if local:                                          # local manifest (TSV/CSV): audio-path col + text col
-        import pandas as pd                            # OpenSLR corpora (e.g. BibleTTS) after download+extract
         # QUOTE_NONE: transcripts legitimately contain " and ', and at pandas' default quoting one
         # stray quote swallows every following line until the next, merging thousands of rows into a
         # single label: which surfaced as "Labels' sequence length 21522 cannot exceed 448 tokens".
@@ -151,13 +154,13 @@ def holdout_manifest_path(seed: int) -> Path:
 
 
 def canonical_held_speakers(cfg) -> set | None:
-    """Held speaker_ids from the CANONICAL holdout manifest (built once over ALL languages by
-    scripts/build_holdout_manifest.py), or None if no matching manifest exists.
+    """Held speaker_ids from the CANONICAL holdout manifest (built once over ALL languages),
+    or None if no matching manifest exists.
 
     One canonical held set shared across arms is what makes a per-language arm's holdout a strict
     SUBSET of the joint champion's holdout: so the two are comparable offline. Re-carving per arm
     (the old path) picks different speakers for lin-only vs joint, which silently leaked and made
-    mms_lin's holdout a mirage (EXPERIMENTS.md). Ignored if the manifest's holdout_frac disagrees
+    one early arm's holdout a mirage. Ignored if the manifest's holdout_frac disagrees
     with cfg (seed is already pinned in the filename)."""
     path = holdout_manifest_path(cfg.seed)
     if not path.exists():
@@ -176,11 +179,12 @@ def load_splits(cfg):
     - Concatenates cfg.data.languages (each via its *_asr config) for the train + validation splits.
     - Carves a SPEAKER-DISJOINT holdout from train (group on speaker_id), our Phase-2 proxy.
     - cfg.data.limit (int or null): per-language cap via streaming, for fast LOCAL/smoke runs;
-      null = full download. The `test` split is loaded only when explicitly requested (permitted in Phase 2).
+      null = full download. This function never loads the `test` split (see the module docstring).
     """
     import itertools
+
     import pandas as pd
-    from datasets import load_dataset, Audio, Dataset, concatenate_datasets
+    from datasets import Audio, Dataset, concatenate_datasets, load_dataset
 
     hf, configs, sr = cfg.data.hf_dataset, cfg.data.configs, cfg.data.sample_rate
     limit = cfg.data.get("limit")
@@ -251,7 +255,8 @@ def load_splits(cfg):
     if canonical is None:
         # No manifest -> single-arm carve (smoke / back-compat). WARNING: a per-language arm carves a
         # DIFFERENT speaker set than the joint champion under this path, so their holdouts are NOT
-        # offline-comparable. Run scripts/build_holdout_manifest.py once for a canonical holdout.
+        # offline-comparable. Provide results/holdout_speakers_seed<seed>.json (the file read by
+        # canonical_held_speakers above) for a canonical, cross-arm-comparable holdout.
         held = set(pd.Series(uniq).sample(frac=cfg.data.holdout_frac, random_state=cfg.seed).tolist())
         print("[data] WARN: no holdout manifest, single-arm carve (not cross-arm comparable).")
     else:

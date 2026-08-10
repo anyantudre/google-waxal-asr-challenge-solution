@@ -8,10 +8,12 @@ Same code path for Phase 1 and Phase 2. Language routing:
 Writes a SampleSubmission-format CSV (columns: ID,Target).
 """
 from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
 
+from waxal_asr.audio import load_clip
 from waxal_asr.config import DATA_DIR, RESULTS_DIR
 from waxal_asr.models import build_model
 from waxal_asr.normalize import make_normalizer
@@ -36,7 +38,7 @@ def _fallback_words(cfg) -> dict:
     blank Targets ("Missing entries for IDs ...") so every row must carry some text."""
     from collections import Counter
     try:
-        from waxal_asr.data import load_zindi_csv, TEXT_COLUMN, ID_COLUMN
+        from waxal_asr.data import ID_COLUMN, TEXT_COLUMN, load_zindi_csv
         norm = make_normalizer(cfg)
         df = load_zindi_csv("Train.csv")
         per, allc = {}, Counter()
@@ -47,7 +49,9 @@ def _fallback_words(cfg) -> dict:
         fb = {lang: c.most_common(1)[0][0] for lang, c in per.items() if c}
         fb["_default"] = allc.most_common(1)[0][0] if allc else _EMPTY_FALLBACK
         return fb
-    except Exception:
+    except Exception as e:
+        print(f"[infer] WARN: could not build fallback words from Train.csv "
+              f"({type(e).__name__}: {e}); using {_EMPTY_FALLBACK!r}")
         return {"_default": _EMPTY_FALLBACK}
 
 
@@ -73,7 +77,7 @@ def run(cfg, test_csv: str = "Test.csv", out_csv: str | None = None, batch_size:
         raise KeyError(f"no id column in {test_path.name}; columns = {list(test.columns)}")
     ids = test[id_col].astype(str).tolist()
 
-    # Phase-2 (audio_dir) loads each clip from disk ON DEMAND per batch, so peak RAM is one batch, 
+    # Phase-2 (audio_dir) loads each clip from disk ON DEMAND per batch, so peak RAM is one batch,
     # the whole (possibly-large) test set is never materialized. Phase-1 (HF, bounded ~4k) caches.
     fetch = _audio_fetcher(ids, cfg)
 
@@ -110,25 +114,6 @@ def run(cfg, test_csv: str = "Test.csv", out_csv: str | None = None, batch_size:
     return sub
 
 
-def _load_one_from_dir(clip_id, audio_dir, sr):
-    """Load a single <id>.* clip from an audio dump: mono, resampled to sr."""
-    import glob
-    import soundfile as sf
-    from pathlib import Path
-    # glob.escape: an id could contain a glob metachar ([, ?, *). sorted(): deterministic pick if an
-    # id somehow has >1 file (e.g. both .wav and .mp3) instead of glob's arbitrary order.
-    matches = sorted(glob.glob(glob.escape(str(Path(audio_dir) / str(clip_id))) + ".*"))
-    if not matches:
-        raise FileNotFoundError(f"no audio file for id {clip_id!r} in {audio_dir}")
-    wav, s = sf.read(matches[0], dtype="float32")
-    if wav.ndim > 1:
-        wav = wav.mean(axis=-1)
-    if s != sr:
-        import librosa
-        wav = librosa.resample(wav, orig_sr=s, target_sr=sr)
-    return wav
-
-
 def _audio_fetcher(ids, cfg):
     """Return a callable: batch_ids -> [np.ndarray], loading audio in ID order.
 
@@ -139,7 +124,7 @@ def _audio_fetcher(ids, cfg):
     audio_dir = cfg.infer.get("audio_dir")
     if audio_dir:
         sr = cfg.data.sample_rate
-        return lambda batch_ids: [_load_one_from_dir(i, audio_dir, sr) for i in batch_ids]
+        return lambda batch_ids: [load_clip(i, audio_dir, sr) for i in batch_ids]
     cache = dict(zip(ids, _load_audio_for_ids(ids, cfg)))
     return lambda batch_ids: [cache[i] for i in batch_ids]
 
@@ -153,10 +138,10 @@ def _load_audio_for_ids(ids, cfg):
     sr = cfg.data.sample_rate
     audio_dir = cfg.infer.get("audio_dir")
     if audio_dir:
-        return [_load_one_from_dir(i, audio_dir, sr) for i in ids]
+        return [load_clip(i, audio_dir, sr) for i in ids]
 
     # Phase-1 HF path: stream each language's test split, collect the requested ids by `id`
-    from datasets import load_dataset, Audio
+    from datasets import Audio, load_dataset
     want = set(ids)
     id2arr: dict = {}
     for lang in cfg.data.languages:

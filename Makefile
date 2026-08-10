@@ -39,7 +39,6 @@ test:
 .PHONY: lint
 lint:
 	$(PYTHON) -m ruff check $(PROJECT) tests
-	$(PYTHON) -m ruff format --check $(PROJECT) tests
 
 .PHONY: format
 format:

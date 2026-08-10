@@ -13,8 +13,10 @@ venv/
 
 # Data and weights are downloaded or generated, never committed. The directories themselves are
 # created on demand by the code, so nothing under them is tracked and no placeholders are needed.
-data/
-models/
+# Both rules are anchored to the repository root: an unanchored `models/` would also swallow the
+# source package waxal_asr/models/.
+/data/
+/models/
 
 # Generated analysis output
 reports/

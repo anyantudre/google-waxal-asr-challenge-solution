@@ -2,17 +2,22 @@
 
 Wraps HuggingFace Trainer/Seq2SeqTrainer so we inherit robust checkpointing and RESUME
 (essential for the remote GPU host's 4h wall-clock: re-submit -> resume from the latest checkpoint).
-Nothing here is model-specific; the adapter (waxal.models) supplies the model, collator,
-Trainer class, TrainingArguments class, eval-decode + logits hooks. See scripts/train.py.
+Nothing here is model-specific; the adapter (waxal_asr.models) supplies the model, collator,
+Trainer class, TrainingArguments class, eval-decode + logits hooks. The entry point is
+waxal_asr.modeling.train.
 """
 from __future__ import annotations
+
+import json
+import math
+import os
 from pathlib import Path
 
-from waxal_asr.config import set_seed, save_config, RUNS_DIR
-from waxal_asr.models import build_model
-from waxal_asr.metrics import score
-from waxal_asr.normalize import make_normalizer
+from waxal_asr.config import RUNS_DIR, save_config, set_seed
 from waxal_asr.data import TEXT_COLUMN, load_splits
+from waxal_asr.metrics import score
+from waxal_asr.models import build_model
+from waxal_asr.normalize import make_normalizer
 
 
 def _has_checkpoint(output_dir: str) -> bool:
@@ -28,7 +33,7 @@ def run(cfg):
     adapter = build_model(cfg)
     if not adapter.trainable:
         raise RuntimeError(
-            f"model.type={cfg.model.type!r} is inference-only, use scripts/infer.py, not train."
+            f"model.type={cfg.model.type!r} is inference-only, use waxal_asr.modeling.predict, not train."
         )
 
     splits = load_splits(cfg)
@@ -63,7 +68,7 @@ def run(cfg):
     adapter._augment = None                 # eval preprocess bakes features (no aug)
 
     # cap the in-training eval set (Whisper generation over the full val set would blow the 4h budget).
-    # The REAL gate uses the full speaker-disjoint holdout via scripts/evaluate.py; this is monitoring only.
+    # The REAL gate is a separate evaluation over the full speaker-disjoint holdout; this is monitoring only.
     val_split = splits["val"]
     n_eval = cfg.train.get("eval_max_samples")
     if n_eval and len(val_split) > n_eval:
@@ -82,7 +87,6 @@ def run(cfg):
     # HF requires save_steps to be a round multiple of eval_steps when load_best_model_at_end=True.
     # Align save UP to the nearest multiple of eval so checkpoints coincide with evals (this is why the
     # smoke test: which sets eval_steps==save_steps, never caught the base config's 300 vs 400 mismatch).
-    import math
     eval_steps = int(cfg.train.eval_steps)
     save_steps = int(cfg.train.save_steps)
     if save_steps % eval_steps != 0:
@@ -93,12 +97,11 @@ def run(cfg):
     # optionally push a RESUMABLE checkpoint to the HF hub during training (survives a killed
     # preempted session): hub_strategy="checkpoint" writes a 'last-checkpoint/' to the repo each save.
     # Enabled only when cfg.train.hub_model_id is set (unset on local/server -> no behaviour change).
-    import os as _os
     hub_args = {}
     if cfg.train.get("hub_model_id"):
         hub_args = dict(push_to_hub=True, hub_model_id=cfg.train.hub_model_id, hub_strategy="checkpoint",
                         hub_private_repo=True,
-                        hub_token=_os.environ.get("HF_TOKEN") or _os.environ.get("WAXAL_HF_TOKEN"))
+                        hub_token=os.environ.get("HF_TOKEN") or os.environ.get("WAXAL_HF_TOKEN"))
 
     targs = adapter.training_args_class()(
         output_dir=output_dir,
@@ -119,7 +122,7 @@ def run(cfg):
         save_total_limit=cfg.train.save_total_limit,
         load_best_model_at_end=True,
         metric_for_best_model="score",
-        greater_is_better=False,                    # lower 0.5*WER+0.5*CER is better
+        greater_is_better=True,                     # score = 1 - 0.5*(WER + CER), higher is better
         logging_steps=25,
         logging_first_step=True,
         report_to=["tensorboard"],
@@ -153,9 +156,8 @@ def run(cfg):
     trainer.train(resume_from_checkpoint=resume)
     trainer.save_model(output_dir)  # final best model + processor
 
-    # final metrics of the best model -> final_metrics.json (comparable summary; monitor.py reads it)
+    # final metrics of the best model -> final_metrics.json (a comparable summary per run)
     try:
-        import json
         m = trainer.evaluate()
         summary = {k.replace("eval_", ""): v for k, v in m.items() if k.startswith("eval_")}
         (Path(output_dir) / "final_metrics.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

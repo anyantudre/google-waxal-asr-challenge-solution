@@ -5,12 +5,13 @@ character-level vocab from the normalized train+val transcripts. Character-level
 ideal here: the challenge scores 0.5*CER, and a char vocab lets the model emit any
 orthography directly.
 
-CRITICAL (see research/Q4_text_norm.md): a character the vocab lacks can never be
-emitted and maps to [UNK], inflating WER/CER. So we FORCE-INCLUDE the lexical
-characters of lin/sna/lug, the apostrophe, hyphen, ŋ, and Lingala French accents, 
-and fail loudly if any required char is somehow absent after normalization.
+CRITICAL: a character the vocab lacks can never be emitted and maps to [UNK],
+inflating WER/CER. So we FORCE-INCLUDE the lexical characters of lin/sna/lug,
+the apostrophe, hyphen, ŋ, and Lingala French accents, so no required character
+can be absent from the vocabulary regardless of what the transcripts contain.
 """
 from __future__ import annotations
+
 import json
 from pathlib import Path
 

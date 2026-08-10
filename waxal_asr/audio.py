@@ -2,15 +2,17 @@
 
 Config-driven (cfg.augment), OFF by default, applied to the TRAIN split ONLY, never to
 eval/test. Uses audiomentations (MIT). We augment the raw 16 kHz mono array before feature
-extraction, so it works for every adapter (waveform-in). See research/Q5_techniques.md.
+extraction, so it works for every adapter (waveform-in).
 
-NOTE: this bakes one random augmentation per example (via the adapter's .map). For
-per-epoch fresh randomness, switch to dataset.set_transform, a documented follow-up we'll
-do when we start running. MP3 caveat: WAXAL audio is ALREADY MP3, so Mp3Compression models
+NOTE: augmentation runs on the fly in the data collator: the dataset map caches the raw
+waveform once (augmentation is not part of the cache fingerprint, so the map never busts),
+and the collator augments and re-extracts features per batch, giving fresh randomness every
+epoch. MP3 caveat: WAXAL audio is ALREADY MP3, so Mp3Compression models
 bitrate/transcode variation at LOW probability, not a naive double-encode.
 Open noise/RIR corpora: MUSAN (OpenSLR SLR17, CC-BY), RIR (OpenSLR SLR28, Apache).
 """
 from __future__ import annotations
+
 import numpy as np
 
 
@@ -30,8 +32,15 @@ def build_augmenter(cfg):
     if not a.get("enabled"):
         return None
     from audiomentations import (
-        Compose, AddGaussianSNR, Gain, PitchShift, TimeStretch,
-        AddBackgroundNoise, ApplyImpulseResponse, Mp3Compression, AirAbsorption,
+        AddBackgroundNoise,
+        AddGaussianSNR,
+        AirAbsorption,
+        ApplyImpulseResponse,
+        Compose,
+        Gain,
+        Mp3Compression,
+        PitchShift,
+        TimeStretch,
     )
     transforms = []
 
