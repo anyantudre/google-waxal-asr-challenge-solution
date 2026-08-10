@@ -3,8 +3,9 @@
 Username: anyantudre
 
 Automatic speech recognition for **Lingala**, **Shona** and **Luganda**, built on the WAXAL corpus.
-Best public leaderboard score **0.766791** (CER 0.108130, WER 0.358288), from the recipe
-`p2n_mbr`.
+**Final result: 2nd place** of the competition, private leaderboard **0.772552** (CER 0.110664,
+WER 0.344233), scored on the recipe `p2n_mbr`, whose public score was 0.766791 (CER 0.108130,
+WER 0.358288).
 
 The competition covers all three languages. Open-set language identification with two independent
 models over the whole of the corrected Phase 2 test set found it to be roughly half Lingala and half
