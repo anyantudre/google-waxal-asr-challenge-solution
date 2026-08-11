@@ -531,6 +531,7 @@ similarity rather than anything the vote lacks. In this work, no holdout improve
 
 The public leaderboard covers roughly 268 clips. For a paired comparison between two similar systems
 the standard error on the score difference is about 0.0013, so **differences below roughly 0.0027
-cannot be distinguished from noise**. The final eight submissions span 0.7643 to 0.7649, which is
-inside that band. The final two were therefore chosen on the principle of maximum averaging rather
-than on ranking within the noise.
+cannot be distinguished from noise**. The last-day candidate submissions span 0.7643 to 0.7668, and
+most neighbouring pairs in that range sit inside the band. The two final picks were therefore chosen
+on the principle of maximum averaging rather than on ranking within the noise, the selection recipe
+`p2n_mbr` first because it also optimises expected character error directly.
