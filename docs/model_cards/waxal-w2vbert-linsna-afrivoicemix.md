@@ -92,7 +92,10 @@ original was lost to a disk cleanup, so the arm was retrained from the same conf
 It is a genuinely different model: it disagrees with the original on 766 of the 892 test clips, 85.9
 per cent. The 26-member ensemble built with it nonetheless changed on only 50 of 892 rows and scored
 0.764774 against 0.764915 for the original, a difference of 0.000141 against a standard error of
-about 0.0013.
+about 0.0013. The scored submission, recipe p2n_mbr, is touched even less: rebuilt from published
+weights it matches the submitted file on 883 of 892 rows, because five of its seven candidate
+ensembles carry this arm at half weight and the per-clip selection can fall back on the other
+candidates.
 
 Read the two holdout figures with care. The retrained checkpoint's 0.2599 looks far better than the
 original's 0.2905, yet the ensemble containing it scored fractionally worse on the leaderboard. The

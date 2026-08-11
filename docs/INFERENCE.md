@@ -554,7 +554,7 @@ connection, and is likewise not needed for inference.
 | CUDA out of memory | pass `--batch-size 2` on an 8 GB card (measured on an 8 GB RTX 4070: the default 8 is for a 32 GB card, and even 4 overflows on a batch of 35 second clips, since clips are batched in test-list order). The masked members' transcripts do not depend on the batch size; see [Known gaps](#9-known-gaps) for the one legacy exception. |
 | output looks stale after changing weights | a per-arm cache was reused. Delete the relevant `data/interim/<arm>_bp<penalty>.json`, including `_nomask` variants, and re-run. |
 | `AttributeError: 'list' object has no attribute 'keys'` | the Sunbird checkpoint loaded outside `waxal_asr/modeling/sunbird.py`. See Section 4. |
-| `p2n_ens_distil` differs from 0.764915 by 0.000141 | expected. The published `p1av` is a retrain; that recipe from published weights returns 0.764774. The same arm shifts the other recipes comparably. |
+| the rebuilt CSV differs from the submitted file on a few rows | expected, and measured: the published `p1av` is a retrain, so `p2n_mbr` rebuilt from published weights matches `cand_mbr.csv` on 883 of 892 rows, and `p2n_ens_distil` returns 0.764774 against the submitted 0.764915. Both are quantified in [SOLUTION.md](SOLUTION.md#the-republished-p1av-arm). |
 
 ## 12. Summary
 

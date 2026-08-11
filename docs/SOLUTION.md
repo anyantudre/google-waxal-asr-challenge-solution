@@ -352,6 +352,19 @@ training is GPU kernel selection in cuDNN, which can move a metric in the fourth
 published weights remove even that: inference from them is deterministic, and it is the inference
 path that reproduces the submitted score.
 
+### Reproduction, verified from a fresh clone
+
+Before this repository was handed over for review, the whole path was rerun the way a reviewer
+would run it: a fresh clone, a fresh Python 3.12 virtual environment built from `requirements.txt`,
+the published weights downloaded from the Hub, and `make lid` followed by `make submission` on
+different hardware from the machine that built the solution (an 8 GB RTX 4070 at `--batch-size 2`;
+about 13 hours end to end). The rebuilt `p2n_mbr` output matches the scored submission file
+`cand_mbr.csv` on **883 of 892 rows**. All 9 differing rows trace to the retrained `p1av` arm
+described below, and the differences are small edits within a transcript. For scale, the same
+retrain moved the 26-member reference ensemble on 50 rows, which cost 0.000141 on the public
+leaderboard; a 9-row difference of the same character sits well inside that, about a twentieth of
+the 0.0027 noise band.
+
 ### The republished p1av arm
 
 The original `p1av` checkpoint was deleted during a disk cleanup and no copy existed locally, on the
@@ -362,10 +375,15 @@ and republished. The retrained arm is **not** the original weights, and the diff
 |---|---|
 | retrained arm against the original, per clip | 766 of 892 transcripts differ, 85.9 per cent |
 | the 26-member ensemble, same comparison | 50 of 892 rows differ, 5.6 per cent |
+| the scored recipe `p2n_mbr`, same comparison | 9 of 892 rows differ, 1.0 per cent |
 | retrained arm alone, public leaderboard | 0.726089 (CER 0.127544, WER 0.420278) |
 | retrained arm holdout | 0.2599 |
 | ensemble with the retrained arm | **0.764774** (CER 0.109046, WER 0.361406) |
 | ensemble with the original arm | **0.764915** |
+
+The scored recipe is touched far less than the reference ensemble because five of its seven
+candidate ensembles carry the retrained arm at half weight, and the per-clip selection then has six
+other candidates to fall back on wherever that vote tips.
 
 Three things follow, and all matter.
 
